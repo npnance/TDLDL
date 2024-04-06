@@ -1,0 +1,44 @@
+{
+    "functionDocs": [
+        {
+            "function": "dots",
+            "description": "generates a grid of random colors with some modifications based on height"
+        },
+        {
+            "function": "catalinaimagemixer",
+            "description": "<span style='color:#722F37;font-size:2em;font-weight:bolder;'>IT'S A FUCKIN' CATALINA IMAGE MIXER!!!!</span>"
+        },
+        {
+            "function": "altWorld",
+            "description": "replace every pixel with a different color<br />and keep that color to use for the same color elsewhere in the image<br />has intentional \"bug\" that it only replaces the first instance of the color<br />because actually doing every pixel looks incomprehensible"
+        },
+        {
+            "function": "ctrlWorld",
+            "description": "replace every pixel with a different color<br />and keep that color to use for the same color elsewhere in the image"
+        },
+        {
+            "function": "iWannaBeTheOne",
+            "description": "various vertical stripes"
+        },
+        {
+            "function": "pieslice",
+            "description": "",
+            "timeout": 120
+        },
+        {
+            "function": "insert_18",
+            "description": "",
+            "timeout": 60
+        },
+        {
+            "function": "vaporwave2By4",
+            "description": "",
+            "timeout": 60
+        },
+        {
+            "function": "whateverDude",
+            "description": "",
+            "timeout": 60
+        }
+    ]
+}
