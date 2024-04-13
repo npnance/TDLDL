@@ -169,7 +169,23 @@ sourceimages/special/*.png:Zone.Identifier
 
 /tdlshelf.log*
 /jupyter
-/imagesExported/*
+/imagesExported/*.png
+/imagesExported/*.gif
+/imagesExported/*.jpg
+/imagesExported/*.tif
 /_private
 /sourceimages/*.mp4
 /sourceimages/*.mov
+/sourceimages/IMG_0430.PNG
+/sourceimages/stamps/100x100*
+/sourceimages/stamps/500px*
+/sourceimages/stamps/cacodemon.png
+/sourceimages/stamps/hurtsabit.jpg
+/sourceimages/stamps/lambo3.jpg
+/sourceimages/stamps/margekrump.png
+/sourceimages/stamps/mariopaint*.*
+/sourceimages/stamps/pacfruit.gif
+/sourceimages/stamps/runninrunnin.jpg
+/sourceimages/stamps/screwball.jpg
+/sourceimages/stamps/sidecat.png
+/sourceimages/stamps/tt11.jpg

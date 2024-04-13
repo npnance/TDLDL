@@ -120,17 +120,23 @@ hr.tdl_sep {
 }
 
 .output-text-llm {
-    width: 50%;
+    width: 75%;
     margin: auto auto;
+}
+
+.output-text-llm img {
+    display: block;
+    width: 100%;
+    margin: 0 auto 3vh auto;
 }
 
 .output-text ul {
     font-family: "MS Sans Serif";
-    font-size: 1.55em;
+    font-size: 1.22em;
     display: grid;    
     gap: .3em;
 
-    background: -webkit-linear-gradient(red, yellow, black);
+    background: linear-gradient(red, yellow, black);
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -218,6 +224,12 @@ pre {
     padding: 1vh 1vw 1vh 1vw;
     border-radius: 10px;
     margin-top: 1vh;
+}
+
+.exif-url pre {
+    border-bottom: 2px solid #000088;
+    padding-bottom: .5vh;
+    margin-bottom: 1vh;
 }
 
 .status {

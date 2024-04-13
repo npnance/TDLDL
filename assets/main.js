@@ -98,27 +98,39 @@
                 data.image = "";
                 socode.innerHTML = JSON.stringify(data, null, 2);
 
-                for (var insertI in data.inserts_used) {
+                var thisItemDiv = document.createElement("div");
+                thisItemDiv.setAttribute("id", "exif-url-0");
+                thisItemDiv.setAttribute("class", "exif-url");
+
+                sacred_output.appendChild(thisItemDiv); 
+
+                var alreadyDone = [];
+
+                for (var insertI in data.inserts_used) {                    
                     var item = data.inserts_used[insertI];
 
-                    var thisItemDiv = document.createElement("div");
-                    thisItemDiv.setAttribute("id", "exif-url-" + insertI.toString());
-                    thisItemDiv.setAttribute("class", "exif-url");
+                    if (alreadyDone.indexOf(item) < 0) {
+                        alreadyDone.push(item);
 
-                    var asdfasdf = $.get("/exif" + item)
-                    .done((data) => {
-                        var spaceDebris = document.createElement("pre");
-                        var moonColony = document.createElement("code");
+                        var asdfasdf = $.get("/exif" + item)
+                        .done((data) => {
+                            var spaceDebris = document.createElement("pre");
+                            var moonColony = document.createElement("code");
 
-                        moonColony.setAttribute("class", "language-json");
+                            moonColony.setAttribute("class", "language-json");                            
 
-                        var textNode = document.createTextNode(JSON.stringify(data));
-                        moonColony.appendChild(textNode);
-                        spaceDebris.appendChild(moonColony);
-                        thisItemDiv.appendChild(spaceDebris);
-                    });                                      
-                    
-                    sacred_output.appendChild(thisItemDiv);                    
+                            var xxzzvv = JSON.stringify(data);
+
+                            var textNode = document.createTextNode(xxzzvv);
+                            moonColony.appendChild(textNode);
+                            spaceDebris.appendChild(moonColony);
+                            thisItemDiv.appendChild(spaceDebris);
+                        })
+                        .fail((f) => {
+                            var textNode = document.createTextNode("No data");
+                            thisItemDiv.appendChild(textNode)
+                        });
+                    }
                 }
             })
             .always((e) => {

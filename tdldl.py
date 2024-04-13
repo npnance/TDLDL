@@ -4845,51 +4845,65 @@ def gritty():
     return img
 
 def grittyer():
-    width = 1024
-    height = 768
-    img = Image.new("RGBA", (width,height), "#ffffff")
-    draw = ImageDraw.Draw(img)
-    
-    pixdata = img.load()
+    """p1: weirdFactor (default=7)<br />
+    p2: divisor (default=26.75)<br />
+    p3: mod value (default=45)
+    """
 
-    r = 0
-    g = 0
-    b = 0
-    
-    i = 0
-    j = 0
+    try:
+        width = getCurrentStandardWidth()
+        height = getCurrentStandardHeight()
 
-    weirdFact = 7
-    
-    for x in range(0, width):
-        if x % weirdFact == 0:
-            for y in range(height):
-                pixdata[x, y] = (r, g, b, j)
-                try:
-                    for wr in range(1, weirdFact+1):
-                        pixdata[x+wr, y] = (r, g, b, j)                
-                except:
-                    pass
-                
-                i += random.randint(1, 10)
-                i = i % 255
-                j = i
-
-                (r, g, b) = colorRandomInc(r, g, b)
-
-                weirdFact = int(7 + (y // 26.75))
-   
-    for x in range(0, width):
-        if x % 45 == 0 or random.randint(0, 15) == 0:
-            (r, g, b) = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) 
+        img = Image.new("RGBA", (width,height), "#ffffff")
+        draw = ImageDraw.Draw(img)
         
-        for y in range(0, height):
-            c = pixdata[x,y]
-            if c[0] == 255 and c[1] == 255 and c[2] == 255:                
-                pixdata[x,y] = (r, g, b)
+        pixdata = img.load()
 
-    # img = img.filter(ImageFilter.EDGE_ENHANCE)
-    #img = imageop_edge(img)
+        r = 0
+        g = 0
+        b = 0
+        
+        i = 0
+        j = 0
+
+        p1 = getParam(0)
+        p2 = getParam(1)
+        p3 = getParam(6)
+
+        weirdFact = int(p1) if p1.isdecimal() else 7
+        staticWeirdFact = int(p1) if p1.isdecimal() else 7
+        staticDivisor = float(p2) if p2.isdecimal() or p2.isnumeric() else 26.75
+        modValue = int(p3) if p3.isdecimal() else 45
+
+        for x in range(0, width):
+            if x % weirdFact == 0:
+                for y in range(height):
+                    pixdata[x, y] = (r, g, b, j)
+                    try:
+                        for wr in range(1, weirdFact+1):
+                            pixdata[x+wr, y] = (r, g, b, j)                
+                    except:
+                        pass
+                    
+                    i += random.randint(1, 10)
+                    i = i % 255
+                    j = i
+
+                    (r, g, b) = colorRandomInc(r, g, b)
+
+                    weirdFact = int(staticWeirdFact + (y // staticDivisor))
+    
+        for x in range(0, width):
+            if x % modValue == 0 or random.randint(0, 15) == 0:
+                (r, g, b) = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)) 
+            
+            for y in range(0, height):
+                c = pixdata[x,y]
+                if c[0] == 255 and c[1] == 255 and c[2] == 255:                
+                    pixdata[x,y] = (r, g, b)
+
+    except Exception as e:
+        img = writeImageException(e)    
     
     return img
 
@@ -5434,8 +5448,8 @@ def nightInterference():
 
 def dayInterference():
     try:
-        width = 2550
-        height = 3300
+        width = 1024
+        height = 768
         img = Image.new("RGB", (width,height), "#000000")
 
         draw = ImageDraw.Draw(img)
@@ -5465,7 +5479,7 @@ def dayInterference():
         # put in some noise
         for x in range(width):
             for y in range(height):
-                if random.randint(0, (height - y)/ 4) == 1:
+                if random.randint(0, (height - y) // 4) == 1:
                     pixdata[x, y] = (0, 0, 0)
                     
         for bleh in range(random.randint(7, 11)):
@@ -5719,6 +5733,29 @@ def floodSample(palette=""):
 
     return img
 
+def stampSample():
+    img = ""
+
+    try:
+        width = 800
+        height = 600
+        
+        img = Image.new("RGB", (width,height), "#ffffff")
+
+        #stmp1 = getStampGenerated()
+        stmp1 = getStamp()
+        
+        floodfill(img, (5, 5),
+                          targetcolour = (255, 255, 255),
+                          newcolour = (0,0,0),
+                          randomIt = 0,
+                          stamp = stmp1)
+        
+    except Exception as e:
+        img = writeImageException(e)
+
+    return img
+
 def drawGrid(draw, rows, cols, gridStep):
     xTimeText = 0
         
@@ -5759,7 +5796,7 @@ def buildGrid(width, height, fillTestTotal=90):
 
     return rows, cols, gridStep
 
-def stampSample():
+def stampFull():
     img = ""
 
     try:
@@ -5904,7 +5941,7 @@ def jumpingDust():
     return img
 
 def dumpingJust():
-    width = 1850
+    width = 1000
     height = 900
     img = Image.new("RGB", (width,height), "#ffffff")
 
@@ -5914,6 +5951,13 @@ def dumpingJust():
     y = 0
 
     pixdata = img.load()
+
+    global input_palette
+        
+    if len(input_palette) > 0:
+        choices = input_palette
+    else:
+        choices = getPaletteGenerated()
      
     r, g, b = 0, 0, 0
 
@@ -5950,7 +5994,8 @@ def dumpingJust():
             floodfill(img, (thisX, thisY),
                       targetcolour = pixdata[thisX, thisY],
                       newcolour = (r,g,b),
-                      randomIt = fillAlg)
+                      randomIt = fillAlg,
+                      choices = choices)
 
             text = str(fillAlg)
 
@@ -5973,7 +6018,8 @@ def dumpingJust():
     floodfill(img, (1, 1),
                       targetcolour = pixdata[0,0],
                       newcolour = (r,g,b),
-                      randomIt = fillAlg)
+                      randomIt = fillAlg, 
+                      choices = choices)
     
     return img
 
@@ -16287,6 +16333,19 @@ def idkWhyWhatever(width=getCurrentStandardWidth(), height=getCurrentStandardHei
 
     return img
 
+def sigilGrid(width=getCurrentStandardWidth(), height=getCurrentStandardHeight()):
+    img = ""
+
+    try:
+        img = Image.new("RGBA", (width, height), "#ffffff")
+        draw = ImageDraw.Draw(img)
+        pixdata = img.load()
+
+    except Exception as e:
+        img = writeImageException(e)
+
+    return img
+
 def getathing(choices, mp, zz):
     lnch = len(choices)
 
@@ -16817,6 +16876,28 @@ def generateAnim(N=75, draw_func=None):
 
     return ani   
 
+def wordGridWordNet(wordline="", fontSize=36, fontPath=""):
+    def eg(word):
+        import wn
+        wn.config.allow_multithreading = True
+        
+        from wn import morphy
+        m = morphy.Morphy()
+
+        en = wn.Wordnet('oewn:2023', lemmatizer=m)
+
+        ss = en.synsets(word)
+
+        if len(ss) > 0:
+            sf = ss[0]
+            sd = sf.definition()
+
+            return str(sd)
+        
+        return "?"        
+
+    return wordGridGeneral(wordline, fontSize, fontPath, eg)
+
 def helloWorldOllama():
     global ollamaHost
     
@@ -16909,7 +16990,14 @@ def llmDescribeImage():
     import ollama
     from ollama import Client
 
-    pathImage = '/mnt/u/My Webs/tooinside/universemdwiki/_private/rushoffailure_cant_even_tell_what_it_is_anymore_rainbow_colors__e5cda5a1-adcf-4966-9a02-a4afee199a15.png'
+    pathImage = getInsertById(getParam(4))
+
+    img = Image.open(pathImage) 
+    img.load()
+    img = img.convert("RGBA")
+
+    [output, contentType, saveFormat] = writeImageToBytes(img, "PNG")
+    img_str = base64.b64encode(output.getvalue())
 
     client = Client(host=ollamaHost)
     response = client.chat(model='llava', messages=[
@@ -16921,6 +17009,7 @@ def llmDescribeImage():
     ])
 
     outputText = "<div class='output-text-llm' id='output-text'>"
+    outputText += f"<img src=\"data:image/png;base64,{img_str.decode('ascii')}\" />"
     outputText += f"{response['message']['content']}"
     outputText += "</div>"
 
@@ -16932,24 +17021,35 @@ def ollamaSimple():
     import ollama
     from ollama import Client
 
+    p1 = getParam(0)
+    p2 = getParam(1)
+
+    outputText = ""
+
+    if p1 == "":
+        p1 = "Act as a system language classifier or function that determines what a phrase means. Give a possible meaning of the following. Do not add a preamble or mention being a language model."
+
+    if p2 == "":
+        p2 = getDecree("","")
+
+    outputText += "<div style='margin-top:10px;margin-bottom:10px;' class='output-text-llm'>system prompt: " + p1 + "<br />"
+    outputText += "user: " + p2 + "<br /></div>"
+
     client = Client(host=ollamaHost)
     response = client.chat(model='llama2', messages=[
         {
             'role': 'system',
-            'content': getParam(0)
+            'content': p1
         },
         {
             'role': 'user',
-            'content': getParam(1)
+            'content': p2
         }
     ])
 
-    outputText = "<div class='output-text-llm' id='output-text'>"
+    outputText += "<div class='output-text-llm' id='output-text'>"
     outputText += f"{response['message']['content']}"
     outputText += "</div>"
-
-    outputText += "<div style='margin-top:10px;'>system prompt: " + getParam(0) + "<br />"
-    outputText += "user: " + getParam(1) + "<br /></div>"
 
     return outputText
 
@@ -17129,6 +17229,7 @@ tdlTypes = OrderedDict([
     ('wordGrid_static', wordGrid_static),
     ('wordGrid_single', wordGrid_single),
     ('wordGrid_Special', {'f':wordGrid_Special, 'ot':'img'}),
+    ('wordGridWordNet', {'f':wordGridWordNet, 'ot':'txt'}),    
     ('slightlyDiffSquares', slightlyDiffSquares),
     ('adaptivePublic', adaptivePublic),
     ('randomTriangles', randomTriangles),
@@ -17217,6 +17318,7 @@ tdlTypes = OrderedDict([
     ('newgrid', newgrid),
     ('fullGradient', fullGradient),    
     ('idkWhyWhatever', idkWhyWhatever),
+    ('sigilGrid', sigilGrid),
     ('numpytest', numpytest),
     ('numpyVerySimple', numpyVerySimple),
     ('numpySimple', numpySimple),
@@ -17339,7 +17441,7 @@ def doMain(basey):
         writeToDisk(blob, "./imagesExported/colorSample.png")
         return (blob, frm)
     
-    print("Couldn't find type: " + imgtype)
+    rootLogger.warn("Couldn't find type: " + imgtype)
     
     blob = Image.new("RGBA", (250,75), "#ffffff")
     blobDraw = ImageDraw.Draw(blob)
@@ -17474,10 +17576,10 @@ def writehtml(basey):
     if paramfont != "":
         paramfontPrnt = "&paramfont=" + paramfont
 
-    if insertSource != "":
+    if insertSource != "" and insertSource != 0 and insertSource != "0":
         insertSourcePrnt = "&insertSource=" + insertSource
     
-    if paramFloodBoxes != "":
+    if paramFloodBoxes != "" and paramFloodBoxes != "false" and paramFloodBoxes != "False":
         paramFloodBoxesPrnt = "&floodBoxes=" + paramFloodBoxes
 
     breakpoint = 10 # (len(tdlTypes) + 4) // 5
@@ -17522,6 +17624,7 @@ def writehtml(basey):
         body += '<li data-func="{}"><a class="{}" href="/tdl?imgtype={}{}{}{}{}{}{}{}{}">{}</a></li>'.format(xxop, isSelImgType, xxop, imageopPrnt, palettePrnt, param1Prnt, param2Prnt, param3Prnt, paramfontPrnt, insertSourcePrnt, paramFloodBoxesPrnt, xxop)
     
     body += '<li><a href="/exported" target="_blank">exported image list</a></li>'
+    body += '<li><a href="/stamps" target="_blank">stamp list</a></li>'
 
     body += '</ul>'
 
@@ -17721,7 +17824,11 @@ def send_exif(thing):
 
     # TODO: return something better
 
-    return {"exif": str(exif), "extracted": zzz }
+    return {
+        "_item": thing,
+        "exif": str(exif), 
+        "extracted": zzz 
+    }
 
 def extractQuery():
     imgtype = request.args.get('imgtype')
@@ -17907,7 +18014,8 @@ def apiimg():
         zonk = wrapperData["inserts_used"][currentUID]
 
         for z in zonk:
-            inserts_used.append(z)
+            if z not in inserts_used:
+                inserts_used.append(z)
 
     if currentUID in wrapperData["function_states"]:
         zink = wrapperData["function_states"][currentUID]
@@ -17938,14 +18046,25 @@ def send_static1(path):
 def send_static2(path):
     return send_from_directory("./imagesExported/", path)
 
+@app.route('/sourceimages/<path:path>')
+def send_static3(path):
+    return send_from_directory("./sourceimages/", path)
+
 @app.route("/<regex(r'(.*?)\.(json|txt|png|ico|js|jpg|jpeg|tif|tiff)$'):file>", methods=["GET"])
 def public(file):
     return send_from_directory('./', file)
 
+@app.route('/stamps')
+def viewStamps():
+    return viewADirectory("./sourceimages/stamps/", htmlPath="/sourceimages/stamps/")
+
 @app.route('/exported')
 def viewExported():
+    return viewADirectory("./imagesExported/", htmlPath="/imagesExported/")
+
+def viewADirectory(path="./imagesExported/", htmlPath="/imagesExported/"):
     paths = []
-    paths.append("./imagesExported/")
+    paths.append(path)
 
     extensions=defaultInsertExtensions
 
@@ -18006,7 +18125,7 @@ def viewExported():
     """
 
     for xImg in images:
-        body = body + "<tr><td>" + xImg + "</td><td class='imgtd'><img src='/imagesExported/" + xImg + "' class='tdlimg'></td></tr>"
+        body = body + "<tr><td>" + xImg + "</td><td class='imgtd'><img src='" + htmlPath + xImg + "' class='tdlimg'></td></tr>"
 
     body = body + """</table>
     </div>
