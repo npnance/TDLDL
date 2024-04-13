@@ -70,9 +70,27 @@ To use TDLDL, follow these steps:
 
 Here are some things I've made with TDLDL.
 
+__mix2_public():__
+
 ![public domain image that's been edited in ways I can't describe](./samples/mix2_public.png)
 
+__textGrid():__
+
 ![a grid of "EQUABLE"](./samples/textGrid.png)
+
+__wordGrid2():__
+
+![a grid of decrees (two to three word phrases randomly generated)](./samples/wordGrid2.png)
+
+__radioFill_recurse():__
+
+![an image filled with itself recursively. it's a cliff with people on it](./samples/radioFill_recurse.png)
+
+__floodSample(), using CGA Mode 1 4-color:__
+
+This demonstrates each floodFill algorithm available in TDLDL.
+
+![floodSample](./samples/floodSample.png)
 
 ## Contributing to TDLDL
 
@@ -93,7 +111,7 @@ Email in the profile.
 
 ## License
 
-[TDLDL](https://github.com/npnance/TDLDL) © 2009 by [Natali Nance](https://github.com/npnance/) is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+[TDLDL](https://github.com/npnance/TDLDL) © 2009-2024 by [Natali Nance](https://github.com/npnance/) is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
 **Commercial use is prohibited, whether it is the application itself or the images/text it creates.** For commercial licensing, you MUST contact me. I have put hundreds of Friday night hours into building TDLDL. "I’ve got this thing and it’s fucking golden, and, uh, uh, I’m just not giving it up for fuckin’ nothing. I’m not gonna do it. And, and I can always use it. I can parachute me there.” — Former Governor and convicted Felon Rod Blagojevich
 

@@ -25,7 +25,7 @@
             "fractal2": 1.58,
             "fractal4": 2.2845299243927,
             "fractalText0": 7.44,
-            "fuckinthatdata": 0.99,
+            "fuckinthatdata": 0.95,
             "fullFill": 14.01,
             "fullFillLatest": 8.42,
             "fullFillSpecific": 8.03,
@@ -81,16 +81,17 @@
             "patoot": 0.55,
             "pieslice": 14.4,
             "pixelDiff": 3.73,
-            "radioFill": 2.48,
+            "radioFill": 6.79,
             "radioFillMixed": 5.61,
             "radioFillWords": 2.16,
             "radioFill_blend": 0.19,
-            "radioFill_recurse": 12.8,
+            "radioFill_recurse": 10.9,
             "radioFill_recurse_canny": 2.42,
             "radioFill_recurse_func": 23.1,
             "radioFill_recurse_swap": 14.84,
             "radioFill_recurse_swap_AB": 0.48,
-            "radioFill_stamp": 6.88,
+            "radioFill_stamp": 6.19,
+            "radioFill_stamp_fromFunc": 30.04,
             "radioFill_stamp_fullFill": 23.18,
             "radioFill_stamp_newgrid": 8.09,
             "radioFill_stamp_wordfilled_mult": 19.795156955718994,
@@ -123,7 +124,7 @@
             "vaguetransfer": 0.15,
             "vhsDouble": 4.67,
             "whateverDude": 4.62,
-            "wordGrid2": 0.36,
+            "wordGrid2": 0.23,
             "wordGrid_Moby": 0.18,
             "wordGrid_Special": 0.45,
             "wordGrid_image": 0.48,
@@ -137,5 +138,5 @@
     "floodfill": {
         "max_stack_depth": {}
     },
-    "xanny_count": 3499
+    "xanny_count": 3576
 }
