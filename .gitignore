@@ -174,6 +174,7 @@ sourceimages/special/*.png:Zone.Identifier
 /imagesExported/*.jpg
 /imagesExported/*.tif
 /_private
+/_profiled
 /sourceimages/*.mp4
 /sourceimages/*.mov
 /sourceimages/IMG_0430.PNG
@@ -189,3 +190,4 @@ sourceimages/special/*.png:Zone.Identifier
 /sourceimages/stamps/screwball.jpg
 /sourceimages/stamps/sidecat.png
 /sourceimages/stamps/tt11.jpg
+sourceimages/special/*

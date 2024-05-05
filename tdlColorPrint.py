@@ -50,8 +50,14 @@ class ColorPrint:
 
         return zonk        
 
+    def get_custom_rgb(self, message, r=255, g=255, b=255):
+        zonk = f'\x1b[38;2;{r};{g};{b}m' + str(message) + '\x1b[0m'
+        return zonk
+
     def print_custom_rgb(self, message, r=255, g=255, b=255):
-        zonk = f'\x1b[38;2;{r};{g};{b}m' + message + '\x1b[0m'
+        zonk = self.get_custom_rgb(message, r, g, b)
         self.logger.debug(zonk)
 
         return zonk
+    
+    # emotion = getRandomWordSpecial("positive", "")

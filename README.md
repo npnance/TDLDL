@@ -113,7 +113,7 @@ Email in the profile.
 
 [TDLDL](https://github.com/npnance/TDLDL) © 2009-2024 by [Natali Nance](https://github.com/npnance/) is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
-**Commercial use is prohibited, whether it is the application itself or the images/text it creates.** For commercial licensing, you MUST contact me. I have put hundreds of Friday night hours into building TDLDL. "I’ve got this thing and it’s fucking golden, and, uh, uh, I’m just not giving it up for fuckin’ nothing. I’m not gonna do it. And, and I can always use it. I can parachute me there.” — Former Governor and convicted Felon Rod Blagojevich
+**Commercial use is prohibited, whether it is the application itself or the images/text it creates.** For commercial licensing, you MUST contact me. I have put hundreds of Friday night hours into building TDLDL. "I’ve got this thing and it’s fucking golden, and, uh, uh, I’m just not giving it up for fuckin’ nothing. I’m not gonna do it. And, and I can always use it. I can parachute me there.” — Former Governor and convicted felon Rod Blagojevich
 
 ## That's all for now
 

@@ -95,8 +95,26 @@
                 var sacred_output = document.getElementById('sacred-output');
                 var socode = document.getElementById('sacred-output-code');
 
+                // var soPalette = document.getElementById('sacred-output-palette');
+
                 data.image = "";
                 socode.innerHTML = JSON.stringify(data, null, 2);
+
+                let paletteData = data['palette'];
+
+                let tableRef = document.getElementById("palette-table");
+  
+                let newRow = tableRef.insertRow(-1);
+
+                for (var ic = 0; ic < paletteData.length; ic++) {
+                    var icItem = paletteData[ic];
+
+                    let newCell = newRow.insertCell(-1);
+                    newCell.style.backgroundColor = icItem
+                    
+                    let newText = document.createTextNode("");
+                    newCell.appendChild(newText);
+                }
 
                 var thisItemDiv = document.createElement("div");
                 thisItemDiv.setAttribute("id", "exif-url-0");

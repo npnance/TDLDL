@@ -4,14 +4,19 @@
     --color-accent: #dd0066;
     --color-secondary: #ff0099;
     --color-walk: #5400ff;
+    --color-func-text: oklch(52.94% 0.185 145.06);
+    --color-func-text-content: darkgreen;
+
+    --font-old-sans: "MS Sans Serif";
+    --font-weird: "Inconsolata", "MS Sans Serif", fantasy, script, sans-serif;
 }
 
 body {
-    font-family: "Amiko","Arial Nova","Helvetica","MS Sans Serif",sans-serif;        
+    font-family: "Amiko","Arial Nova","Helvetica","Arial","MS Sans Serif",sans-serif;    
 }
 
 .font-weird {
-    font-family: "MS Sans Serif";
+    font-family: var(--font-weird);
 }
 
 .container-reload {
@@ -111,12 +116,12 @@ hr.tdl_sep {
 }
 
 .tdl-output-txt {
-    color: green;
+    color: var(--color-func-text);
 }
 
 .tdl-output-txt.active {
-    background: linear-gradient(to right, white, darkgreen);
-    color: darkgreen;
+    background: linear-gradient(to right, white, var(--color-func-text-content));
+    color: var(--color-func-text-content);
 }
 
 .output-text-llm {
@@ -131,19 +136,36 @@ hr.tdl_sep {
 }
 
 .output-text ul {
-    font-family: "MS Sans Serif";
+    font-family: var(--font-old-sans);
     font-size: 1.22em;
     display: grid;    
     gap: .3em;
+}
 
+.output-text ul:not(.palette) {
     background: linear-gradient(red, yellow, black);
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
+.output-text ul.palette {
+    color: black;
+}
+
 .output-text:not(.single-file) ul {
     grid-template-columns: repeat(2, 1fr);
+}
+
+.output-text table th {
+    font-weight: bold;
+}
+
+.output-text table tr, 
+.output-text table td,
+.output-text table th {
+	padding: .5vw;
+	border: 2px dotted gainsboro;
 }
 
 .description-container {
@@ -167,8 +189,19 @@ hr.tdl_sep {
     border: 2px solid black;
 }
 
+.result-container {
+    width: 75%;
+}
+
 .result-container-img img {
     width: 100%;
+}
+
+.result-container-inner {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: center;
 }
 
 .result-container-img:not(.loaded) {
@@ -280,4 +313,13 @@ pre {
 
 #sacred-guid-value {
     width: 100%;
+}
+
+#palette-table {
+    width: 100%;
+}
+
+#palette-table td {
+    border: 1px solid black;
+    height: 1vh;
 }

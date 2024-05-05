@@ -1,24 +1,26 @@
 # -*- coding: utf-8 -*-
 
 from multiprocessing.managers import DictProxy
-import sys
-import os
-import io
-import random
-import time
-import math
+import base64
+import colorsys
+import configparser
 import datetime
+import hashlib
+import io
+import json
+import logging
+import math
+import multiprocessing
+from numba import jit, njit
+import os
+import queue
+import random
+import shelve
+import string
+import sys
+import time
 import traceback
 import uuid
-import colorsys
-import shelve
-import logging
-import multiprocessing
-import queue
-import configparser
-import json
-import base64
-import string
 
 from collections import OrderedDict
 from operator import itemgetter
@@ -37,10 +39,10 @@ from tdlColorPrint import ColorPrint
 from tdlState import TdlState
 from tdlState import TdlValues
 
-# from werkzeug.middleware.profiler import ProfilerMiddleware
+#from werkzeug.middleware.profiler import ProfilerMiddleware
 
 app = Flask(__name__)
-# app.wsgi_app = ProfilerMiddleware(app.wsgi_app, profile_dir='/home/nn/flaskdev/_profiled/')
+#app.wsgi_app = ProfilerMiddleware(app.wsgi_app, restrictions=[50], profile_dir='/home/nn/flaskdev/_profiled/')
 
 class RegexConverter(BaseConverter):
     def __init__(self, url_map, *items):
@@ -54,7 +56,7 @@ app.url_map.converters['regex'] = RegexConverter
 shelfFileName = "tdlshelf.log"
 
 fontPath = "/mnt/c/windows/fonts/"
-fontNameMono = "Couri.ttf"
+fontNameMono = "Cour.ttf"
 fontNameSansSerif = "Verdana.ttf"
 fontNameImpact = "Impact.ttf"
 publicDomainImagePath = "/mnt/u/code/python/commons/download/"
@@ -74,7 +76,8 @@ allPaths = [
     "/mnt/t/Pictures/",
     "/mnt/u/code/python/commons/tiffsOnly/",
     "/mnt/t/Pictures/From Lumia920White/Camera roll/",
-    "/mnt/t/Pictures/From_iPhone6/"
+    "/mnt/t/Pictures/From_iPhone6/",
+    "./imagesExported/"
 ]
 
 ollamaHost = 'http://192.168.1.29:11434/v1'
@@ -125,6 +128,9 @@ pilLogger.setLevel(logging.WARNING)
 
 print (f'PIL Logger level set to: {pilLogger.level}')
 
+numba_logger = logging.getLogger('numba')
+numba_logger.setLevel(logging.WARNING)
+
 colorPrint = ColorPrint(rootLogger)
 
 colorPrint.print_custom_palette(147, f"---------> here be dragons ------------------------>")
@@ -157,7 +163,8 @@ fontBlacklist = ["LilyPond",
                  "mtextra",
                  "OUTLOOK",
                  "HARLOWSI",
-                 "PARCHM"
+                 "PARCHM",
+                 "Gottlieb"
                  ]
 
 #----------- color and palette definitions. best not to change. --------
@@ -175,7 +182,7 @@ wackyColors = [(255,255,0),
 
 randoFillList = [18, 19, 20, 21, 24, 26, 33, 34, 36, 37, 38, 39, 42, 43, 44, 45, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 68, 69, 70, 73, 74, 77, 79, 82, 84, 85, 86]
 
-maxFloodFillArg = 87
+maxFloodFillArg = 88
 
 # ---- okay, you can change fourColorPalettes. IF you promise to be careful.
 
@@ -191,12 +198,12 @@ fourColorPalettes = (('000000','ffffff','ff0000','00ff00','0000ff'),
 
 # --- safe funcs ---------------------------------------------
 
-imageoplist = ["fourit", "twoit", "invert", "hueshift", "edge", "contour", "detail", "adaptiverandom", "pixelate",
-               "redit", "greenit", "blueit", "colorit", "fourcolorTDL", "godcolor", "fourblend", "colorize", "colorizeerize", "coloritup", "garlic",
+imageoplist = ["fourit", "twoit", "invert", "hueshift", "edge", "contour", "detail", "adaptiverandom_mediancut", "adaptiverandom_octree", "adaptiverandom_quant", "adaptive", "adaptive_mediancut", "adaptive_quant",
+               "pixelate", "fourcolorTDL", "godcolor", "fourblend", "redit", "greenit", "blueit", "colorit", "colorize", "colorizeerize", "coloritup", "garlic",
                "findfaces", "grayscale", "minfilter", "maxfilter", "medianfilter",
-               "remixed", "remix_blend", "adaptive", "doublediff", "linepainter_inv", "fullfill_diff",
+               "remixed", "remix_blend", "doublediff", "linepainter_inv", "fullfill_diff",
                "copydiff", "colorhatch_diff", "colorhatch_bw_diff", "fullgradient_diff", "canny_inv", "canny_color", "weirderator", 
-               "cornerharris", "xanny"]
+               "cornerharris", "kmeans", "xanny"]
 
 def getSafeFuncs():
     safeFuncs = [altWorld,
@@ -214,9 +221,16 @@ def getSafeFuncs():
                          gradientSquares,
                          hsvTesting,
                          paletteSquares,
-                         atariripples]
+                         atariripples,
+                         diagonal4Way]
 
     return safeFuncs
+
+def getOneSafeFunc():
+    key = random.choice(getSafeFuncs())
+    colorPrint.print_custom_palette(191, f"[--------> getOneSafeFunc ---- {key} --------->")
+
+    return key
 
 # globals ---------------------------------------------- @~-------
 
@@ -251,7 +265,24 @@ wordsMoby = dict()
 
 # * put tdldl on a vps
 # * have fun
+# * remap_palette
 # * EXIGENT MIDNIGHT
+
+# Cryptomeld: Unlocks encrypted memories, revealing forgotten secrets.
+# Voidweave: Tears a rift in reality, allowing passage to hidden realms.
+# Nexthex: Bends time, altering the course of events with a whisper.
+# Soulforge: Fuses consciousness with machine, blurring the boundaries.
+# Neuroshade: Cloaks thoughts, shielding them from prying algorithms.
+# Chromebane: Corrodes cybernetic implants, rendering them useless.
+# Synthblood: Infuses veins with synthetic life, granting unnatural vitality.
+# Wraithwire: Threads through firewalls, stealing forbidden data.
+# Cortexhex: Rewrites neural pathways, rewriting destiny itself.
+# Viraluxe: Spreads digital contagion, infecting networks with chaos.
+# Quantumwhisper: Speaks to quantum particles, altering probabilities.
+# Holothren: Summons holographic constructs, illusions with teeth.
+# Nanoshroud: Wraps the body in nanobots, granting ethereal form.
+# Echodark: Echoes the screams of erased memories, haunting the present.
+# Aetherpulse: Disrupts reality grids, unraveling the fabric of existence.
 
 # logging ---------------------------------------------- @~-------
 
@@ -295,7 +326,9 @@ def timeoutWrapper(queue, bob, wordChoice, palette, extParamsPassed, uid, key):
 
     colorPrint.print_custom_palette(191, f"[--------> timeoutWrapper ---- {key} --------->")
     colorPrint.print_custom_palette(191, f"| uid: {str(uid)}       --->")
-    colorPrint.print_custom_palette(198, f"[          bob starts ------------------------>")
+
+    startTimeCheck()
+    colorPrint.print_custom_palette(198, f"[          bob starts -------{writeTimeCheck()}----->")
 
     if not isinstance(bob, dict) and bob.__name__ == "textGrid":
         result = bob(wordChoice)
@@ -304,9 +337,7 @@ def timeoutWrapper(queue, bob, wordChoice, palette, extParamsPassed, uid, key):
     else:
         result = bob["f"]()
 
-    colorPrint.print_custom_palette(198, f"---------> bob done   -------------------------]")
-
-    doTimeCheck("bob done")
+    colorPrint.print_custom_palette(198, f"---------> bob done   -------{writeTimeCheck()}-----]")
 
     # ColorPrint.logger_info("wrapperData: " + writeWrapperToLog(wrapperData))    
     # ColorPrint.logger_info("telemetry: " + writeWrapperToLog(telemetry))
@@ -324,7 +355,11 @@ def timeoutWrapper(queue, bob, wordChoice, palette, extParamsPassed, uid, key):
     queue.put(uid)
     queue.close()
 
-    colorPrint.print_custom_palette(191, f"[--------> timeoutWrapper done ----------------]")
+    colorPrint.print_custom_palette(191, f"---------> timeoutWrapper done ----------------]")
+
+def writeTimeCheck():
+    x = round(getTimeCheck()[1], 5)
+    return colorPrint.get_custom_rgb(x)
 
 def callWithTimeout(doThisThing, TIMEOUT, wordChoice="ALONE", palette="", key=""):
     global extParams
@@ -340,14 +375,18 @@ def callWithTimeout(doThisThing, TIMEOUT, wordChoice="ALONE", palette="", key=""
     # Wait for TIMEOUT seconds
     try:
         result = queueueueueue.get(True, TIMEOUT)
-    except queue.Empty:
-        # TODO: Deal with lack of data somehow
+    except queue.Empty as exEmp:
+        colorPrint.print_custom_palette(171, f"---------> callWithTimeout ----   empty   --------->")
+        colorPrint.print_custom_palette(171, f"{exEmp}")
+        colorPrint.print_custom_palette(171, f"{proc} / {dir(proc)}")
         result = None
-        print(proc)        
     except Exception as e:
+        colorPrint.print_custom_palette(171, f"---------> callWithTimeout ---- exception --------->")
+        colorPrint.print_custom_palette(171, f"{e}")
         rootLogger.error(proc)
         raise
-    finally:        
+    finally:
+        colorPrint.print_custom_palette(171, f"callWithTimeout: killing bob. don't tell") 
         proc.kill()
 
     # Process data here, not in try block above, otherwise your process keeps running
@@ -357,6 +396,12 @@ def startTimeCheck():
     global timeStart
     timeStart = time.time()
     return
+
+def getTimeCheck():
+    global timeStart
+    t1 = time.time()
+
+    return (t1, t1-timeStart)
 
 def doTimeCheck(otherInfo="", i=0):
     global timeStart
@@ -381,7 +426,46 @@ def logException(e):
     rootLogger.error("---------------------")
     
 # utility/supporting functions ------------------------- @~-------
+
+def getParam(i):
+    global extParams
+   
+    result = ""
     
+    if extParams != []:
+        if i >= 0 and len(extParams) >= (i+1) and extParams[i] != "":
+            result = extParams[i]
+        elif i < 0 and extParams[i] != "":
+            result = extParams[i]
+        
+    return result
+
+def getIntParams(defaultP1=250, defaultP2=100):
+    p1 = getParam(0)
+    p2 = getParam(1)
+    p1 = int(p1) if p1.isdecimal() else defaultP1
+    p2 = int(p2) if p2.isdecimal() else defaultP2
+
+    return (p1, p2)
+
+def getTextPosFromImgAndTextSize(img_size, text_size):
+    # |                 |                 |
+    # |          |             |          |
+    # x = midpoint minus (half the text/2)
+
+    midpoint = int(img_size // 2)
+    half_text = int(text_size // 2)
+    z = midpoint - half_text if midpoint - half_text >= 0 else 0
+        
+    return z
+
+def getRandomFloodFill():
+    global maxFloodFillArg
+
+    iAlg = random.randint(1, maxFloodFillArg)
+    
+    return iAlg
+
 def safetyCheck(*args):
     lst = ()
     if len(args) == 3:
@@ -423,10 +507,34 @@ def safetyCheck_LeaveAtMax(*args):
 def hex_to_rgb(value):
     value = value.lstrip('#')
     lv = len(value)
-    return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
+    x = tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
+    
+    if len(x) > 4:
+        rootLogger.debug(f'value: {value} output: {x}')
+        
+    return x
 
 def rgb_to_hex(rgb):
     return '#%02x%02x%02x' % rgb
+
+def calculate_luminace(color_code):
+    index = float(color_code) / 255 
+
+    if index < 0.03928:
+        return index / 12.92
+    else:
+        return ( ( index + 0.055 ) / 1.055 ) ** 2.4
+    
+def calculate_relative_luminance(rgb):
+    return 0.2126 * calculate_luminace(rgb[0]) + 0.7152 * calculate_luminace(rgb[1]) + 0.0722 * calculate_luminace(rgb[2]) 
+
+def calcContrastRatio(color1, color2):
+    light = color1 if sum(color1) > sum(color2) else color2
+    dark = color1 if sum(color1) < sum(color2) else color2
+
+    contrast_ratio = ( calculate_relative_luminance(light) + 0.05 ) / ( calculate_relative_luminance(dark) + 0.05 )
+
+    return contrast_ratio
 
 def lum(r,g,b,a=0):
     return math.sqrt( .241 * r + .691 * g + .068 * b )
@@ -449,13 +557,24 @@ def getInverse(c):
 def resizeToMinMax(img, maxW, maxH, minW, minH):
     doTimeCheck("resizeToMinMax starts")
 
+    img = resizeToMin(img, maxW, maxH, minW, minH)
+
+    z = resizeToMax(img, maxW, maxH)
+    
+    doTimeCheck("resizeToMinMax complete")
+
+    return z
+
+def resizeToMin(img, maxW, maxH, minW, minH):
+    doTimeCheck("resizeToMin starts")
+
     if img.size[0] > maxW or img.size[1] > maxH or img.size[0] < minW or img.size[1] < minH:
         (w, h) = getSizeByMinMax(img.size[0], img.size[1], maxW, maxH, minW, minH)
         img = img.resize((int(w), int(h)), Image.LANCZOS)
 
-    doTimeCheck("resizeToMinMax complete")
+    doTimeCheck("resizeToMin complete")
 
-    return resizeToMax(img, maxW, maxH)
+    return img
 
 def resizeToMax(img, maxW, maxH):
     doTimeCheck("resizeToMax starts")
@@ -526,6 +645,9 @@ def writeImageException(e):
     rootLogger.error(sys.exc_info())
 
     logException(e)
+
+    colorPrint.print_custom_palette(141, f"{e}")
+    colorPrint.print_custom_palette(141, f"{dir(e)}")
             
     img = Image.new("RGBA", (1024, 768), "#FFFFFF")
     draw = ImageDraw.Draw(img)
@@ -624,11 +746,23 @@ def check_image_operation(img, imageop, palette):
         if iop == "detail":
             img = imageop_detail(img)
 
-        if iop == "adaptiverandom":
+        if iop == "adaptiverandom_mediancut":
+            img = imageop_adaptive(img, quantOption=0)
+
+        if iop == "adaptiverandom_octree":
             img = imageop_adaptive(img)
 
+        if iop == "adaptiverandom_quant":
+            img = imageop_adaptive(img, quantOption=3)
+
+        if iop == "adaptive_mediancut":
+            img = imageop_adaptive_palette(img, palette, quantOption=0)
+
         if iop == "adaptive":
-            img = imageop_adaptive_palette(img, palette)
+            img = imageop_adaptive_palette(img, palette, quantOption=2)
+
+        if iop == "adaptive_quant":
+            img = imageop_adaptive_palette(img, palette, quantOption=3)
             
         if iop == "pixelate":
             img = imageop_pixelate(img)
@@ -720,6 +854,9 @@ def check_image_operation(img, imageop, palette):
 
         if iop == "cornerharris":
             img = imageop_cornerHarris(img)
+
+        if iop == "kmeans":
+            img = imageop_kmeans(img)
         
         if iop == "xanny":
             img = imageop_xanny(img)
@@ -740,7 +877,12 @@ def imageop_pixelate(img):
             
     return img
 
-def imageop_adaptive(img, palette=""):
+def imageop_adaptive(img, palette="", quantOption=2):
+    # MEDIANCUT = 0
+    # MAXCOVERAGE = 1
+    # FASTOCTREE = 2
+    # LIBIMAGEQUANT = 3
+
     img = img.convert("RGB")
 
     if palette == "":
@@ -753,14 +895,14 @@ def imageop_adaptive(img, palette=""):
     pal = pal.convert("P", palette=Image.ADAPTIVE)
 
     img.load()
-    img = img.quantize(method=2, palette=pal)
+    img = img.quantize(method=quantOption, palette=pal) # TODO: dither
 
     return img
 
-def imageop_adaptive_palette(img, palette=1):
+def imageop_adaptive_palette(img, palette=1, quantOption=2):
     choices = getPaletteSpecific(palette)
 
-    return imageop_adaptive(img, choices)
+    return imageop_adaptive(img, choices, quantOption)
 
 def imageop_grayscale(img):
     img = img.convert("RGB")
@@ -859,13 +1001,16 @@ def imageop_fourcolor(inputFile, palette=0, choices=[]):
     else:
         colors = random.choice(fourColorPalettes)
     
-    inputFile = inputFile.convert("RGB")
+    return fourColorWithPalette(inputFile, colors)
 
-    pixels = ImageOps.grayscale(inputFile).getdata()
+def fourColorWithPalette(inputImg, colors):
+    inputImg = inputImg.convert("RGB")
+
+    pixels = ImageOps.grayscale(inputImg).getdata()
 
     ranges = getGoodRanges(pixels, len(colors))
 
-    img2 = Image.new(inputFile.mode, inputFile.size,)
+    img2 = Image.new(inputImg.mode, inputImg.size,)
     img2.putdata(colorfun(pixels, colors, ranges))
 
     img2.load()
@@ -1018,6 +1163,15 @@ def imageop_weirderator(inputFile):
 
 def imageop_cornerHarris(inputFile):
     import cv2 as cv
+    
+    # img - Input image. It should be grayscale and float32 type.
+    # blockSize - It is the size of neighbourhood considered for corner detection
+    # ksize - Aperture parameter of the Sobel derivative used.
+    # k - Harris detector free parameter in the equation.
+
+    blockSize = 4
+    ksize = 5
+    k = 0.04
 
     inputFile = inputFile.convert("RGBA")
 
@@ -1025,14 +1179,55 @@ def imageop_cornerHarris(inputFile):
 
     gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     gray = numpy.float32(gray)
-    dst = cv.cornerHarris(gray, 2, 5, 0.07)
+    dst = cv.cornerHarris(gray, blockSize, ksize, k)
+
+    c = getRandomColor()
 
     # marking the corners
     #dst = cv.dilate(dst, None)
 
-    img[dst > 0.01 * dst.max()] = getRandomColor()
+    img[dst > 0.01 * dst.max()] = c
 
     im_pil = Image.fromarray(img)
+    im_pil = im_pil.convert("RGBA")
+
+    return im_pil
+
+def imageop_kmeans(inputFile):
+    import cv2 as cv
+
+    K = 8
+    attempts = 10
+
+    inputFile = inputFile.convert("RGB")
+
+    img = numpy.array(inputFile)
+
+    shape = (-1,3)
+
+    colorPrint.print_custom_palette(197, f"current shape: {numpy.shape(img)}")
+
+    Z = img.reshape(shape)
+    
+    colorPrint.print_custom_palette(197, f"new shape: {numpy.shape(Z)}")
+    
+    # convert to np.float32
+    Z = np.float32(Z)
+    
+    # define criteria, number of clusters(K) and apply kmeans()
+    # criteria: `( type, max_iter, epsilon )`
+    # The algorithm termination criteria, that is, the maximum number of iterations and/or the desired accuracy. 
+    # The accuracy is specified as criteria.epsilon. As soon as each of the cluster centers moves by less than criteria.epsilon on some iteration, the algorithm stops. 
+
+    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, attempts, 1.0)    
+    ret,label,center=cv.kmeans(Z,K,None,criteria,attempts,cv.KMEANS_RANDOM_CENTERS)
+    
+    # Now convert back into uint8, and make original image
+    center = np.uint8(center)
+    res = center[label.flatten()]
+    res2 = res.reshape((img.shape))
+
+    im_pil = Image.fromarray(res2)
     im_pil = im_pil.convert("RGBA")
 
     return im_pil
@@ -1688,18 +1883,103 @@ def getAlgName(iAlg):
         "60", "61", "62", "63", "64", "65", "66", "67", "68", "Nice.",
         "70", "71", "72", "73", "74", "75", "76", "77", "78", "79",
         "80", "81", "82", "83", "84", "85", "86", 
-        "idk yet"
+        "idk yet", "88"
     ]
     
     algDict = {i:values[i] for i in range(len(values))}
    
     return algDict.get(iAlg, str(iAlg))
 
+# TODO: from enum import Enum
+
+# 0: ready
+# 1: needs processing
+# 2: is processing
+# 9: processing complete
+# 255: locked, take no further action
+
+@njit
+def canBeTouched(bitboard, x, y):
+    if x >= bitboard.shape[0]:
+        return False
+    elif y >= bitboard.shape[1]:
+        return False
+    elif bitboard[x,y] == 255:
+        return False
+    else:
+        return True
+
+@njit
+def canChange(bitboard, x, y, newValue):
+    if canBeTouched(bitboard, x, y):
+        # return True if the newValue can overwrite the old one
+
+        oldValue = bitboard[x,y]
+
+        if oldValue == newValue:
+            return False
+        elif oldValue <= 0:
+            return True
+        elif oldValue == 255:
+            return False
+        elif newValue > oldValue:
+            return True
+        elif newValue <= 0:
+            return True
+        
+        return False
+
+@njit
+def touchThatBit(bitboard, x, y, value):
+    if canChange(bitboard, x, y, value):
+        bitboard[x,y] = value
+
+    return bitboard
+
+@njit
+def getTouchState(bitboard, x, y):
+    if canBeTouched(bitboard, x, y):
+        return bitboard[x,y]
+    
+    return -2
+
+@njit
+def find_first_numba(vec):
+    """return the index of the first occurence of item in vec"""
+    for i in range(len(vec)):
+        if vec[i]:
+            return i
+    return None
+
+@njit
+def getBitboardNext(bitboard, value=1):
+    # x = np.where(bitboard == value)
+    # y = np.transpose(x)
+
+    # for k in y:
+    #     return (k[0],k[1])
+        
+    # return None
+
+    # for idx, val in np.ndenumerate(bitboard):
+    #     if val == value:
+    #         return idx
+
+    for i in range(len(bitboard)):
+        for j in range(len(bitboard[i])):
+            if bitboard[i][j] == value:
+                return (i,j)
+            
+    return None
+
+@njit
+def createNumPyArray(width, height):
+    return np.zeros(shape=(width,height), dtype=np.uint8)
+
 def floodfill(img, xystart, 
               targetcolour, 
               newcolour, 
-              dumpEveryX=70,
-              useQueue=False,
+              dumpEvery=0,
               randomIt=0,
               sizeLimit=(0,0),
               choices=[],
@@ -1712,6 +1992,12 @@ def floodfill(img, xystart,
               disobey=0,
               variantOverride=None):
 
+    startTimeCheck()
+    colorPrint.print_custom_palette(7, f'[   floodfill starts ------ {writeTimeCheck()} ----> {getDecree("","")}')
+
+    width = img.size[0]
+    height = img.size[1]
+
     showFloodedBoxes = getParam(5)
 
     p3 = getParam(6)
@@ -1722,11 +2008,13 @@ def floodfill(img, xystart,
 
     global telemetry    
 
-    # doTimeCheck("floodfill starts")
     (startx, starty) = xystart
     debugMode = False
+    resetFloodfillStates()
    
-    from collections import deque
+    #from collections import deque
+    workpile = []
+    getpoint = workpile.pop
 
     global primaryColors
     global wackyColors
@@ -1766,13 +2054,26 @@ def floodfill(img, xystart,
     if defaultTip:
         tippingPoint = getTippingPoint(randomIt)
 
-    if useQueue:
-        workpile = deque()
-        getpoint = workpile.popleft
-    else:
-        workpile = []
-        getpoint = workpile.pop
- 
+    paramState = dict(xystart=xystart, 
+              targetcolour=targetcolour, 
+              newcolour=newcolour, 
+              dumpEvery=dumpEvery,
+              randomIt=randomIt,
+              sizeLimit=sizeLimit,
+              choices=choices,
+              maxStackDepth=maxStackDepth,
+              tippingPoint=tippingPoint,
+              defaultTip=defaultTip,
+              compFunc=compFunc,
+              stamp=stamp,
+              stampTrans=stampTrans,
+              disobey=disobey,
+              variantOverride=variantOverride)
+
+    colorPrint.print_custom_palette(203, f"[{paramState}]")
+
+    del paramState
+    
     minX = startx
     maxX = startx
     minY = starty
@@ -1798,17 +2099,53 @@ def floodfill(img, xystart,
     if stamp != None:
         stmpdata = stamp.load()
         
+    #bitboard = createNumPyArray(width, height)
     touched = {}
    
     workpile.append((startx,starty,0))
+    #touchThatBit(bitboard, startx, starty, 1)
 
-    addState(f"op: floodfill, iAlg: {randomIt} - {getAlgName(randomIt)}, tippingPoint: {tippingPoint}, x: {startx}, y: {starty}, maxStackDepth: {maxStackDepth}, variant: {variant}", None)
+    addState(f"op: floodfill, iAlg: {randomIt} - {getAlgName(randomIt)}, tippingPoint: {tippingPoint}, x: {startx}, y: {starty}, maxStackDepth: {maxStackDepth}, variant: {variant}", None)    
 
-    width = img.size[0]
-    height = img.size[1]
+    iPoint = 0
+    
+    emotion = getRandomWordSpecial("positive", "")
+
+    #honk = getBitboardNext(bitboard, 1)
+
+    stackDepth = 1
 
     while len(workpile) > 0 and (count < maxCount or maxCount == 0):
+        # if honk != None:
+        #     (x,y) = honk
+
+        if isItTimeToDump(dumpEvery, iPoint):
+            colorPrint.print_custom_rgb(f"workpile: {len(workpile)} -- {writeTimeCheck()} ----->", 255, 0, 88)
+
         x,y,stackDepth=getpoint()
+        pointHash = hash((x,y))
+
+        #bitState = getTouchState(bitboard, x, y)        
+
+        if isItTimeToDump(dumpEvery, iPoint):
+            colorPrint.print_custom_rgb(f"now: {(x,y)} ----- {writeTimeCheck()} ----->", 255, 0, 88)
+            colorPrint.print_custom_rgb(f"x: {x} y: {y}, count: {count}, maxCount: {maxCount}", 255, 0, 188)
+        
+        skipItObviously = False
+        
+        # if bitState == 1:
+        #     touchThatBit(bitboard, x, y, 2)
+        # elif bitState == 2:
+        #     pass
+        # elif bitState == 9:
+        #     pass
+        # elif bitState == 255:
+        #     pass
+
+        if isItTimeToDump(dumpEvery, iPoint):            
+            colorPrint.print_custom_palette(13, f"| floodfill: workpile loop begin @ {iPoint} --- {writeTimeCheck()} ---->")
+            colorPrint.print_custom_palette(113, f"| x: {x}, y: {y}, count: {count}, maxCount: {maxCount} ---->")
+            colorPrint.print_custom_palette(77, f"| feeling: {emotion} -------------------- ---->")
 
         if x < minX: minX = x
         if x > maxX: maxX = x
@@ -1821,1429 +2158,104 @@ def floodfill(img, xystart,
         if "max_stack_depth" not in telemetry['floodfill']:
             telemetry['floodfill']['max_stack_depth'] = {}        
 
-        #if str(stackDepth) not in telemetry['floodfill']['max_stack_depth']:
-        #    telemetry['floodfill']['max_stack_depth'][str(stackDepth)] ,= 0
-
-        #telemetry['floodfill']['max_stack_depth'][str(stackDepth)] += 1
-
-        pointHash = hash((x,y))        
-
-        if debugMode:
-            rootLogger.debug(str(x) + "," + str(y) + "|" + str(stackDepth) + "|" + str(pointHash) + "|" + str(pointHash in touched) + "|" + str(sizeLimit[0] == 0) + "|" + str(sizeLimit[1] == 0) + "\r\n")
-
         if iAlgOrig == -1:
             # now watch this drive
             randomIt = random.randint(1, maxFloodFillArg)
-
-        skipItObviously = False
 
         if disobey > 0:
             uhahah = random.uniform(0, 1)
 
             if uhahah > disobey:
-                skipItObviously = True            
+                # emotion = getRandomWordSpecial("negative", "")
+                skipItObviously = True
 
         if maxStackDepth > 0 and stackDepth > maxStackDepth:
-            skipItObviously = True        
+            skipItObviously = True
+
+        # if isItTimeToDump(dumpEvery, iPoint):
+        #     colorPrint.print_custom_rgb(f"bitboard[x,y]: {getTouchState(bitboard, x, y)}", 255, 0, 188)
+        #     colorPrint.print_custom_rgb(f"canChange(bitboard, x, y, 9): {canChange(bitboard, x, y, 9)}", 255, 0, 188)
+
+        # if not canChange(bitboard, x, y, 9):
+        #     skipItObviously = True
 
         if pointHash in touched or skipItObviously:
+            # if isItTimeToDump(dumpEvery, iPoint):
+            #     colorPrint.print_custom_palette(119, f"| touched: {getTouchState(bitboard, x, y)}   |")
             pass
-        elif (abs(x-startx) < sizeLimit[0] or sizeLimit[0] == 0) and (abs(y-starty) < sizeLimit[1] or sizeLimit[1] == 0):
+        elif (sizeLimit[0] == 0 or abs(x-startx) < sizeLimit[0]) and (sizeLimit[1] == 0 or abs(y-starty) < sizeLimit[1]):
             try:
-                if randomIt != 2:
+                if isItTimeToDump(dumpEvery, iPoint):
+                    colorPrint.print_custom_palette(33, f"| floodfill: touchy loop begin @ {iPoint} --- {writeTimeCheck()} ---->")
+                    colorPrint.print_custom_palette(67, f"| x: {x}, y: {y}, count: {count}, maxCount: {maxCount}, compFunc: {compFunc} ---->")
+                    colorPrint.print_custom_palette(37, f"| sizeLimit: {sizeLimit}, your mom's sizeLimit: infinity ---->")
+                    colorPrint.print_custom_palette(47, f"| abs(x-startx): {abs(x-startx)}, abs(y-starty): {abs(y-starty)} ---->")
+                    colorPrint.print_custom_palette(57, f"| x < img.size[0]: {x < img.size[0]}, y < img.size[1]: {y < img.size[1]} ---->")
+                    colorPrint.print_custom_rgb(f"tc: {targetCheck(pixdata,x,y, targetcolour, compFunc)}", 255, 88, 111)
+
+                #if randomIt != 2:
                     # 2 relies on this broken behavior of filling points multiple times
-                    touched[pointHash] = 1
+                    # touchThatBit(bitboard, x, y, 9)
+                touched[pointHash] = 1
                 
-                if x < img.size[0] and y < img.size[1] and targetCheck(pixdata[x,y], targetcolour, compFunc):
+                if x < img.size[0] and y < img.size[1] and targetCheck(pixdata,x,y, targetcolour, compFunc):
                     # ---------- floodfill randomIt iAlgs begin here ----- switch statement tdlIdFloodfill --> 
 
-                    if stamp != None:
-                        # take the color from the stamp (map it somehow)
-                        xOff = x % (stamp.size[0])
-                        yOff = y % (stamp.size[1])
-
-                        newcolour = stmpdata[xOff, yOff]
-
-                        if stampTrans != None:
-                            if stampTrans == newcolour:
-                                newcolour = pixdata[x,y]
-                        
-                    elif randomIt == 1:
-                        # random
-                        if variant == 1 or variant > 15:
-                            if choices == []:
-                                newcolour = (random.randint(0,255),
-                                            random.randint(0,255),
-                                            random.randint(0,255))
-                            else:
-                                newcolour = random.choice(choices)                  
-                        elif variant < 5:
-                            z = (y << variant) + x
-
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                        elif variant < 10:
-                            z = x & y & variant
-
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                        elif variant <= 15:
-                            z = (x | y) & variant
-
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                        
-                    elif randomIt == 2:
-                        # the tipping point
-                        if choices == []:
-                            newcolour = primaryColors[switcher]
-                        else:
-                            newcolour = choices[switcher]
-                            
-                        i += 1
-
-                        if i % tippingPoint == 0:
-                            switcher += 1
-
-                        if choices == []:    
-                            if switcher > len(primaryColors) - 1:
-                                switcher = 0
-                        else:
-                            if switcher > len(choices) - 1:
-                                switcher = 0
-                                
-                    elif randomIt == 3:
-                        # night random
-                        oldcolour = primaryColors[switcher]
-                        newcolour = (random.randint(0,128),
-                                     random.randint(0,50),
-                                     random.randint(0,100))
-                        i += 1
-                        if i % tippingPoint == 0:
-                            switcher += 1
-
-                        if switcher > len(primaryColors) - 1:
-                            switcher = 0
-
-                        if random.randint(0, 100) == 1:
-                            newcolour = (random.randint(0,255),
-                                     random.randint(0,255),
-                                     random.randint(0,255))
-                    elif randomIt == 4:
-                        # dark noise
-                        newcolour = (random.randint(0,100),
-                                     random.randint(0,128),
-                                     random.randint(0,128))
-                    elif randomIt == 5:
-                        # bar grid
-                        if count == 0:
-                            a = [random.choice(choices),random.choice(choices),random.choice(choices)]
-                            random.shuffle(a)
-                        
-                        if x % (3 - iLoveThatGirl) == 0 or x % (7 - iLoveThatGirl) == 0:
-                            newcolour = a[0]
-                        elif y % (5 - iLoveThatGirl) == 0:
-                            newcolour = a[1]
-                        elif x % 5 == 0:
-                            newcolour = random.choice(choices)
-                        else:
-                            newcolour = a[2]
-                    elif randomIt == 6:
-                        # EGA noise
-                        if choicesChosen:
-                            newcolour = random.choice(choices)
-                        else:
-                            newcolour = random.choice(primaryColors)
-                    elif randomIt == 7:
-                        # long bars
-                        if variant == 1:
-                            mod_x = (count % tippingPoint == 0)
-                        elif variant == 0:
-                            mod_x = (count % (tippingPoint//2) == 0)
-                        else:
-                            mod_x = count % variant == 0
-
-                        if mod_x:
-                            newcolour = random.choice(choices)
-                    elif randomIt == 8:
-                        # the color of a tv tuned to a dead channel
-                        newcolour = (200, random.randint(0, 255), 200)
-                        newclist = [newcolour[0],newcolour[1],newcolour[2]]                        
-                        random.shuffle(newclist)
-                        newcolour = (newclist[0],newclist[1],newclist[2])
-                    elif randomIt == 9:
-                        # green noise
-                        if random.randint(0,2) == 1:
-                            if choicesChosen:
-                                newcolour = random.choice(choices)
-                            else:                            
-                                newcolour = (random.randint(0, 25),
-                                             random.randint(128, 200),
-                                             random.randint(0, 225))
-                    elif randomIt == 10:
-                        # bar john
-                        if variant == 1:
-                            mod_x = 0
-                            mod_y = y
-
-                            if count == mod_x or x % tippingPoint == mod_x or mod_y % tippingPoint == mod_x:
-                                newcolour = random.choice(choices)
-                        elif variant == 0:
-                            mod_x = 1
-                            mod_y = random.randint(0, tippingPoint)
-
-                            if count == mod_x or x % tippingPoint == mod_x or mod_y % tippingPoint == mod_x:
-                                newcolour = random.choice(choices)
-                        elif variant < 6:
-                            mod_x = variant - 1
-                            mod_y = y
-
-                            if count == mod_x or x % tippingPoint == mod_x or mod_y % tippingPoint == mod_x:
-                                newcolour = random.choice(choices)
-                        else:
-                            mod_x = x - (x % 3)
-                            mod_y = y - (y % (variant * 10))
-
-                            z = (mod_y << 8) | mod_x
-
-                            mod_xond1 = (count == 0 or count % variant == 0)
-                            mod_xond2 = (x % variant == 0)
-                            mod_xond3 = (y % variant == 0)
-
-                            if mod_xond1 or mod_xond2 or mod_xond3:
-                                z = count
-                            
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 11:
-                        # diamond hatch
-                        newcolour = choices[switcher]
-                        i += 1
-
-                        if i % tippingPoint == 0:
-                            switcher += 1
-                            
-                        if switcher > len(choices) - 1:
-                            switcher = 0
-                    elif randomIt == 12:
-                        # wacky noise
-                        if x % (4 - iLoveThatGirl) == 0 or x % (6 - iLoveThatGirl) == 0:
-                            newcolour = choices[0]                            
-                        elif y % (3 - iLoveThatGirl) == 0:
-                            newcolour = choices[1]                            
-                        else:
-                            newcolour = choices[2]
-
-                        if x % 5 == 0 or y % 5 == 0:
-                            random.shuffle(choices)
-                    elif randomIt == 13:
-                        # T_H_E__S_H_U_F_F_L_E_R______________________________________________
-                        if count % tippingPoint == 0 or (y % tippingPoint == 0):
-                            if len(choices) == 0:
-                                nclist = list(newcolour)
-                                random.shuffle(nclist)
-                                newcolour = (nclist[0], nclist[1], nclist[2])
-                            else:
-                                newcolour = random.choice(choices)
-                    elif randomIt == 14:
-                        # lil bars
-                        if count % 5 == 0:
-                            newcolour = random.choice(choices)
-                    elif randomIt == 15:
-                        # purple noise
-                        if count == 0 or count % 7 == 0:
-                            if choicesChosen:
-                                a = random.choice(choices)
-                                a = [a[0], a[1], a[2]]
-                            else:                            
-                                a = [random.randint(128, 200),
-                                    random.randint(0, 25),
-                                    random.randint(0, 225)]
-
-                        if count % 15 == 0:
-                            random.shuffle(a)
-                            
-                        newcolour = (a[0], a[1], a[2])
-                    elif randomIt == 16:
-                        # bland noise
-                        if (count == 0 or count % 15 == 0) and choicesChosen:                            
-                            newcolour = random.choice(choices)
-
-                        a = [newcolour[0], newcolour[1], newcolour[2]]                    
-                        random.shuffle(a)
-                        newcolour = (a[0], a[1], a[2])
-                    elif randomIt == 17:
-                        # soldiers
-                        if count == 0:
-                            if len(choices) == 0:
-                                choices = [primaryColors[0], primaryColors[1], primaryColors[2]]
-                                
-                            random.shuffle(choices)
-                        else:
-                            if y % 20 == 0:
-                                random.shuffle(choices)
-                            
-                        newcolour = choices[0]
-                    elif randomIt == 18:
-                        # child soldiers
-                        mod_x = x - (x % 10)
-                        
-                        if y % 8 == 0 or (x % 10 == 0 and y % 8 != 0):
-                            random.shuffle(choices)
-                            newcolour = choices[0]
-                            colorsKept[str(mod_x)] = newcolour
-                        else:                            
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 19:
-                        # horizontal bars
-                        mod_y = y - (y % 5)
-                        if str(mod_y) not in colorsKept:
-                            if len(choices) == 0:
-                                newcolour = (random.randint(0,255),
-                                             random.randint(0,255),
-                                             random.randint(0,255))
-                            else:
-                                newcolour = random.choice(choices)
-
-                            colorsKept[str(mod_y)] = newcolour
-                        else:
-                            newcolour = colorsKept[str(mod_y)]
-                    elif randomIt == 20:
-                        # small flannel
-                        if last_z == 0:
-                            z = y
-                            last_z = 1
-                        else:
-                            z = x
-                            last_z = 0
-                            
-                        mod_x = z - (z % tippingPoint)
-                        
-                        if str(mod_x) not in colorsKept:
-                            newcolour = random.choice(choices)
-                            
-                            colorsKept[str(mod_x)] = newcolour
-                        else:
-                            newcolour = colorsKept[str(mod_x)]    
-                    elif randomIt == 21:
-                        # vertical bars
-                        mod_x = x - (x % 5)
-                        if str(mod_x) not in colorsKept:
-                            newcolour = random.choice(choices)
-                            
-                            colorsKept[str(mod_x)] = newcolour
-                        else:
-                            newcolour = colorsKept[str(mod_x)]
-                    elif randomIt == 22:
-                        # D E A D N I G H T S K Y ____________________________
-                        
-                        # copy of 3 initially
-
-                        if count == 0:
-                            z = 0
-
-                        if z == 0:
-                            newcolour = random.choice(choices)
-                            
-                            i += 1
-                            if i % tippingPoint == 0:
-                                switcher += 1
-
-                            if switcher > len(primaryColors) - 1:
-                                switcher = 0
-
-                            x3 = random.randint(0, 100)
-                            
-                            if x3 == 1:
-                                newcolour = (0,0,random.randint(0,150))
-                            elif x3 > 75:
-                                newcolour = random.choice(choices)
-
-                            for jj in range(0, 3):
-                                if newcolour[jj] > 150:
-                                    newcolour = replace_at_index(newcolour, jj, newcolour[jj] - 100)
-
-                            z = 1
-                        else:
-                            newcolour = random.choice(choices)
-                            z = 0
-                    elif randomIt == 23:
-                        # D E A D N I G H T G R O U N D ______________________
-                        
-                        if variant == 1:
-                            variant_d1 = 50
-                            variant_d2 = -3
-                            variant_d3 = -1
-                        elif variant == 0:
-                            variant_d1 = random.randint(1, 100)
-                            variant_d2 = -3
-                            variant_d3 = -2
-                        else:
-                            variant_d1 = int(variant * 3)
-                            variant_d2 = abs(variant_d1) * -1
-                            variant_d3 = abs(variant) * -1
-
-                        switcher = random.randint(0, 2)
-                        amount = 1 if random.randint(0, 1) == 1 else -1
-                        
-                        if amount == 1 and newcolour[switcher] > variant_d1:
-                            amount = -1
-
-                        conseq += amount
-
-                        # don't keep going the same direction all the time
-                        if conseq < variant_d2 or conseq > abs(variant_d2):
-                            amount = amount * variant_d3
-                            conseq = amount
-                        
-                        if variant == 1:
-                            newcolour = replace_at_index(newcolour, switcher, newcolour[switcher] + amount)
-                            a = [newcolour[0], newcolour[1], newcolour[2]]
-                            random.shuffle(a)
-                            newcolour = (a[0], a[1], a[2])
-                        else:
-                            if variant < 5:
-                                zzz = amount + conseq
-                                (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, zzz)
-                            else:
-                                zzz = amount + (conseq % tippingPoint)
-                                (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, zzz)
-                    elif randomIt == 24:
-                        # F U Z Z Y _ F L A N N E L __________________________
-                        if last_z == 0:
-                            z = y
-                            zz = x
-                            last_z = 1
-                        else:
-                            z = x
-                            zz = y
-                            last_z = 0
-                            
-                        mod_x = z - (z % tippingPoint)
-                        mod_y = zz - (zz % tippingPoint)
-                        
-                        if str(mod_x) not in colorsKept:
-                            newcolour = random.choice(choices)
-                            
-                            colorsKept[str(mod_x)] = newcolour
-
-                            if str(mod_y) not in colorsKept:
-                                colorsKept[str(mod_y)] = newcolour
-                        else:
-                            newcolour = colorsKept[str(mod_x)]                                             
-                    elif randomIt == 25:
-                        # T I M E _ L I M I T ________________________________
-                        mod_x = x - (x % tippingPoint)
-                        if str(mod_x) not in colorsKept:
-                            if len(choices) == 0:
-                                newcolour = (random.randint(0,255),
-                                             random.randint(0,255),
-                                             random.randint(0,255))
-                            else:
-                                newcolour = random.choice(choices)
-
-                            colorsKept[str(mod_x)] = newcolour
-                            timesUsed[str(mod_x)] = 1
-                        else:
-                            times = timesUsed[str(mod_x)]
-
-                            if times > tippingPoint:
-                                if len(choices) == 0:
-                                    newcolour = (random.randint(0,255),
-                                             random.randint(0,255),
-                                             random.randint(0,255))
-                                else:
-                                    newcolour = random.choice(choices)
-
-                                colorsKept[str(mod_x)] = newcolour
-
-                                timesUsed[str(mod_x)] = 1
-                            else:
-                                newcolour = colorsKept[str(mod_x)]
-                                timesUsed[str(mod_x)] = (times + 1)
-                    elif randomIt == 26:
-                        # 8 0 S  T R I P
-                        z = abs(x % tippingPoint - y % tippingPoint)
-                        
-                        if str(z) not in colorsKept:
-                            newcolour = random.choice(choices)
-                            
-                            colorsKept[str(z)] = newcolour
-                        else:
-                            newcolour = colorsKept[str(z)]
-                    elif randomIt == 27:
-                        # D_E_A_D__M_A_L_L__H_A_U_N_T_I_N_G______
-                        mod_y = y % tippingPoint                       
-                        mod_x = x % tippingPoint
-
-                        if count % tippingPoint == 0:
-                            newcolour = random.choice(choices)
-                            colorsKept[str(mod_y)] = newcolour
-                            colorsKept[str(mod_x)] = newcolour
-                        elif str(mod_y) not in colorsKept:
-                            newcolour = random.choice(choices)
-                            colorsKept[str(mod_y)] = newcolour
-                            colorsKept[str(mod_x)] = newcolour
-                        elif str(mod_x) not in colorsKept:
-                            newcolour = random.choice(choices)
-                            colorsKept[str(mod_y)] = newcolour
-                            colorsKept[str(mod_x)] = newcolour
-                        else:                            
-                            newcolour = random.choice([colorsKept[str(mod_y)], colorsKept[str(mod_x)]])
-                    elif randomIt == 28:
-                        # BIG ___ GRID __________________________________________________
-                                    
-                        if count == 0:                            
-                            switcher = random.choice([1, -1])
-
-                        (mod_x, mod_y) = get_grid_vals(x, y, tippingPoint)
-                        
-                        mod_z = mod_y + (mod_x * switcher)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_z)
-                    elif randomIt == 29:
-                        # 8 bit sq outline
-                        if x % 5 == 0 or y % 5 == 0:
-                            newcolour = (0,0,0)
-                        else:
-                            mod_x = x + y - (y % tippingPoint) - (x % tippingPoint)
-                            
-                            if str(mod_x) not in colorsKept:
-                                if len(choices) == 0:
-                                    r = random.randint(1, 255)
-                                    g = random.randint(r-1, 255)
-                                    b = random.randint(0, g)
-                                    rgb = [r, g, b]
-                                
-                                    newcolour = (random.choice(rgb), random.choice(rgb), random.choice(rgb))
-                                else:
-                                    newcolour = random.choice(choices)
-                                
-                                colorsKept[str(mod_x)] = newcolour
-                            else:
-                                newcolour = colorsKept[str(mod_x)]
-                    elif randomIt == 30:
-                        # P_I_G__G_R_I_D_______________________________________________________________________
-                        if count == 0:
-                            tippingPoint = random.randint(5, 15)
-                            switcher = random.choice([1, -1])
-                            mod_q = random.choice([2, 3, 4])
-
-                        (mod_x, mod_y) = get_grid_vals(x, y, tippingPoint)
-                        
-                        mod_z = mod_y + (mod_x * switcher)
-
-                        if x % (tippingPoint * mod_q) == 0 or y % (tippingPoint * mod_q) == 0:
-                            mod_z = 999
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_z)
-                    elif randomIt == 31:
-                        # M_E_L_T_I_N_G__P_O_T_________________________________________________________________
-                        x3 = x - (x % 8)
-                        y3 = y - (y % 8)
-                        z31 = x3 & y3
-                        
-                        if count == 0:
-                            z3 = random.randint(5, 10)
-                            z = 0
-                        elif random.randint(0, z3) == 0:
-                            z = random.randint(0, len(choices))
-
-                        mod_x = str(z) + "_" + str(z31)
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 32:
-                        # SOUTHEAST CRUMBO                        
-                        
-                        mod_x = x - y + (x % tippingPoint//2) + (y % tippingPoint//2)                        
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 33:
-                        # TODDLERS
-
-                        if count == 0:
-                            mod_33 = random.randint(1, 5) * 5
-
-                        mod_x = y - (y % mod_33)
-                        
-                        if count == 0:
-                            last_x = 0
-                            newcolour = random.choice(choices)
-                        else:
-                            if last_x != mod_x:
-                                newcolour = random.choice(choices)
-
-                        last_x = mod_x
-                    elif randomIt == 34:
-                        # U_N_I_F_O_R_M____________________________________________________________________________
-                        if count == 0:
-                            for c in choices:
-                                if str(c) not in timesUsed:
-                                    timesUsed[str(c)] = 0
-                            
-                        newcolour = random.choice(choices)
-                        if str(newcolour) not in timesUsed:
-                            timesUsed[str(newcolour)] = 0
-                                
-                        thisused = timesUsed[str(newcolour)]
-
-                        minUsed = thisused                        
-
-                        for p in timesUsed:
-                            if timesUsed[p] < minUsed:
-                                minUsed = timesUsed[p]
-                                newcolour = eval(p)
-
-                        timesUsed[str(newcolour)] += 1
-                    elif randomIt == 35:
-                        # S_L_O_W__C_H_A_N_G_E_S_________________________________________________________--__-_____
-                        
-                        if not choicesChosen:
-                            if count == 0:
-                                direction = 1
-                                newcolour = random.choice(choices)
-                            else:
-                                iThis = random.randint(0, 2)
-
-                                if newcolour[iThis] + direction > 255 or newcolour[iThis] + direction < 0:
-                                    direction *= -1
-                                    
-                                newcolour = replace_at_index(newcolour, iThis, newcolour[iThis] + direction)
-                        else:
-                            mod_x = x - (x % 5)
-                            mod_x2 = (x - 5) - ((x-5)%5)
-
-                            mod_x2c = 0
-
-                            if str(mod_x) in colorsKept:
-                                newcolour = colorsKept[str(mod_x)]
-                            else:
-                                if str(mod_x2) in colorsKept:
-                                    mod_x2c = colorsKept[str(mod_x2)]
-                            
-                                newcolour = random.choice(choices)
-
-                                while newcolour == mod_x2c:
-                                    newcolour = random.choice(choices)
-
-                                colorsKept[str(mod_x)] = newcolour
-                    elif randomIt == 36:
-                        # B_A_R__S_C_R_E_W________________________________________________________
-                        mod_x = x - (x % tippingPoint) + (random.randint(-2, 2) * tippingPoint)
-
-                        if mod_x < 0:
-                            mod_x = 0
-                            
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 37:
-                        # AND MOD
-                        mod_x = x & y
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 38:
-                        # OR MOD
-                        mod_x = x | y
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 39:
-                        # EXP MOD
-                        mod_x = x ^ y
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 40:
-                        # MODDLEDEE
-                        mod_x = (x - (x % tippingPoint)) & (y - (y % tippingPoint))
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 41:
-                        # MODDLEDUM
-                        mod_x = (x - (x % tippingPoint)) | (y - (y % tippingPoint))
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 42:
-                        # HIGH INDIAN
-                        mod_x = int(abs(math.sin(x) + math.sin(y)) * 100)
-                        mod_x = mod_x - (mod_x % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 43:
-                        # MUSHROOM EXPRESS
-                        mod_x = int(abs(math.sin(x) + math.cos(y)) * 100)
-                        mod_x = mod_x - (mod_x % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 44:
-                        # LUIGI IN THE SKY WITH DIAMONDS
-                        mod_x = int(abs(math.cos(x) + math.sin(y)) * 100)
-                        mod_x = mod_x - (mod_x % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 45:
-                        # KNEE FOLDER BURIED IN THE TUNDRA
-                        mod_x = int(abs(math.sin(x) + math.cos(y)) * 100)
-                        mod_y = int(abs(math.cos(x) + math.sin(y)) * 100)
-                        mod_z = random.choice([mod_x, mod_y])
-                        mod_z = mod_z - (mod_z % tippingPoint)                        
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_z)
-                    elif randomIt == 46:
-                        # ARC EXPLOSION
-                        mod_x = int(abs(math.hypot(x, y)))
-                        mod_x = mod_x - (mod_x % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 47:
-                        # SATURN'S BIRTHDAY
-                        mod_x = int(abs(math.log1p(x) + math.log1p(y)) * 250)
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 48:
-                        # CIRCLE 8
-                        mod_x = int(abs(math.exp(x % tippingPoint))) + int(abs(math.exp(y % tippingPoint)))
-                        mod_x = mod_x - (mod_x % tippingPoint)
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 49:
-                        # 4D FLANNEL
-                        if count == 0:
-                            z = 0
-
-                        if z == 0:
-                            if y > x:
-                                if y == 0:
-                                    y = 1
-                                mod_x = (x % y) ^ len(choices)
-                            elif y == x:
-                                if y == 0:
-                                    y = 1
-                                mod_x = (x+1 % y) ^ len(choices)
-                            else:
-                                if x == 0:
-                                    x = 1
-                                mod_x = (y % x) ^ len(choices)
-
-                            z = 1
-                        elif z == 1:
-                            mod_x = x ^ y
-                            z = 2
-                        elif z == 2:
-                            mod_x = int(abs(math.hypot(x, y)))
-                            z = 0
-                            
-                        mod_x = mod_x - (mod_x % tippingPoint)
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 50:
-                        # PUSH WALLPAPER 
-                        mod_x = (x ^ y) % len(choices)
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 51:
-                        # CRAYON NUKE
-                        mod_x = int(abs(math.hypot(startx-x, starty-y)))
-                        mod_x = mod_x - (mod_x % tippingPoint)
-
-                        mod_y = int(abs(math.log1p(x) - math.log1p(y)) * abs(math.log1p(x) + math.log1p(y)))
-
-                        if count % 2 == 0:
-                            mod_z = mod_x
-                        else:
-                            mod_z = mod_y
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_z)
-                    elif randomIt == 52:
-                        # THE SMELL OF BLUEBERRY MARKERS
-                        mod_x = x ^ y ^ count
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 53:
-                        # HEROIN FROM TOPANGA                        
-
-                        (mod_x, mod_y) = get_grid_vals(x, y, tippingPoint)
-
-                        mod_x = ((y ^ x) % 25) & (mod_y | mod_x)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 54:
-                        # RESOGROVE FINISH
-                        mod_x = ((x ^ y) & (int(time.time() * 150) % 10))
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 55:
-                        # N_A_T_I_V_E___B_L_A_N_K_E_T____________________
-                        mod_x = int(abs(math.hypot(x, y))) ^ x
-                        mod_x = mod_x - (mod_x % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 56:
-                        # TRY BALL MEAT
-                        if y > x:
-                            mod_x = int(abs(math.hypot(y, x))) | x
-                        else:
-                            mod_x = int(abs(math.hypot(x, y))) | y
-                            
-                        mod_x = mod_x - (mod_x % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 57:
-                        # TURN THE KNOB
-                        z = random.choice([x, y])
-                        mod_x = int(abs(math.hypot(x, y))) | z
-                        mod_x = mod_x - (mod_x % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 58:
-                        # X MARKS THE X
-                        mod_x = x ^ y
-                        mod_x = mod_x - (mod_x % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 59:
-                        # JUTTING URANUS
-                        mod_x = int(abs(math.hypot(x, y)) * math.pi)                        
-                        
-                        z = mod_x ^ y
-                        z = z - (z % tippingPoint)
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 60:
-                        # TINY DECO
-                        if y > x:
-                            mod_x = int(abs(math.hypot(y, x)) * math.pi)                        
-                            
-                            z = mod_x ^ x
-                        else:
-                            mod_x = int(abs(math.hypot(x, y)) * math.pi)                        
-                        
-                            z = mod_x ^ y
-                            
-                        z = z - (z % tippingPoint)
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 61:
-                        # ONCE I SHOT GOD ON BROADWAY
-                        if random.randint(0, 1) == 0:
-                            mod_x = x & y
-                        else:
-                            mod_x = x | y
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 62:
-                        # YEAH
-                        z = random.randint(0, 1)
-                        
-                        if (y > x and z == 0) or (x > y and z == 1):
-                            mod_x = x & y
-                        else:
-                            mod_x = x | y
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 63:
-                        # ARKY BARKY
-                        if count == 0:
-                            z = 0
-
-                        if z == 0:
-                            mod_x = int(abs(math.hypot(x, y)))
-                            mod_x = mod_x - (mod_x % tippingPoint)
-                            z = 1
-                        elif z == 1:
-                            mod_x = int(abs(math.log1p(x) - math.log1p(y)) * 25)
-                            z = 2
-                        elif z == 2:
-                            mod_x = x ^ y
-                            z = 3
-                        elif z == 3:
-                            mod_x = x & y
-                            z = 0
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 64:
-                        # D_I_R_T_Y___C_A_R_P_E_T_________________________
-                        if count == 0:
-                            z = 1
-                            ogtp = tippingPoint
-
-                        if z >= 5:
-                            mod_x = x ^ y
-                        
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)                            
-                            z = 1                           
-                        else:
-                            tippingPoint = ogtp * z
-                            mod_x = x + y - (x % tippingPoint) - (y % tippingPoint)
-                        
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                            z += 1
-                    elif randomIt == 65:
-                        # UNIQUE VAN FIBER
-                        if count == 0:
-                            z = 0
-                            k = 5
-                            ogtp = tippingPoint
-
-                        if k <= 0:
-                            k = 5
-                            
-                        tippingPoint = ogtp * k
-                        
-                        if z == 0:
-                            mod_x = (x - (x % tippingPoint)) & (y - (y % tippingPoint))
-                            z = 1
-                        else:
-                            mod_x = (x - (x % tippingPoint)) | (y - (y % tippingPoint))
-                            z = 0
-                            k -= 1
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 66:
-                        # ?_??_???_????_?????________________________________
-                        mod_x = int(x * math.pi) | int(y * math.pi)
-                        mod_y = int(x * math.e) | int(y * math.e)
-
-                        z = mod_x & mod_y
-                        z = z - (z % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 67:
-                        # P_L_A_Y_I_N_G___T_H_E____S_T_A_R______________________
-                        if count == 0:
-                            zchoices = [2, 3, 5, 7, 11, 47]
-                            z3choices = [1, 2, 4, 8, 16]
-                            
-                            z1 = random.choice(zchoices)
-                            z2 = z1
-
-                            while z2 == z1:
-                                z2 = random.choice(zchoices)
-
-                            z3 = random.choice(z3choices)
-                            z4 = z3
-                            z5 = z3
-
-                            while z4 == z3:
-                                z4 = random.choice(z3choices)
-
-                            while z5 == z3:
-                                z5 = random.choice(z3choices)
-                                
-                        if count % 2 == 0:
-                            mod_x = math.sqrt(z1)
-                        else:
-                            mod_x = math.sqrt(z2)
-                            
-                        z8 = int(x * mod_x) ^ int(y * mod_x)
-                        z9 = int(x * mod_x) | int(y // mod_x)
-                        z7 = x & y
-
-                        z = (z8 & z9) | z7 | z3 | z4 | z5
-                        z = z - (z % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 68:
-                        # T_H_E_ F_E_E_L_I_N_G_S_ N_E_V_E_R_ T_O_L_D__________-__________---_____                        
-                        
-                        if count % 2 == 0:
-                            # 66
-                            mod_x = int(x * math.pi) | int(y * math.pi)
-                            mod_y = int(x * math.e) | int(y * math.e)
-
-                            z = mod_x & mod_y
-                            z = z - (z % tippingPoint)                            
-                        else:
-                            z = x ^ y                            
-                            
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 69:
-                        # NICE.
-
-                        if count % 2 == 0:
-                            mod_x = int(x * 6.969) | int(y * 6.969)
-                            mod_y = int(x // 6.969) | int(y // 6.969)
-                        else:
-                            mod_x = int(x * 6.969) & int(y * 6.969)
-                            mod_y = int(x // 6.969) & int(y // 6.969)
-                        
-                        z = mod_x | mod_y | 69
-                        z = z - (z % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 70:
-                        # EL DITHERO ___________________________________
-                        if count % 2 == 0:
-                            mod_x = int(abs(math.hypot(x, y))) ^ x                        
-                        else:
-                            mod_x = x ^ y
-
-                        mod_x = mod_x - (mod_x % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 71:
-                        # CUBE 5: THE FINAL CUBING               
-                        if len(zCol) <= 0:
-                            for i71 in range(0, len(choices)):
-                                zCol.append(i71)
-                            
-                            random.shuffle(zCol)
-
-                        mod_x2 = x - (x % 2)
-                        mod_y2 = y - (y % 2)
-                           
-                        z = zCol.pop()
-
-                        zz71 = count % 4
-                        
-                        if zz71 == 0 or zz71 == 2:
-                            mod_x = (z ^ (mod_x2 | mod_y2) ^ (mod_x2 & mod_y2)) % len(choices)
-                        elif zz71 == 1:
-                            mod_x = (x & y) % len(choices)
-                        else:
-                            mod_x = (x | y) % len(choices)
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 72:
-                        # HOW_COULD_IT_ALL_FALL_ONE_DAY______________________________72_____________                      
-
-                        if count == 0:
-                            z72 = random.randint(10, 100)
-                            
-                        grid_z = x + y - (x % z72) - (y % z72)
-
-                        if count % 2 == 0:
-                            bg1 = x
-                            bg2 = y
-                            
-                            if x > bg2:
-                                bg1 = y
-                                bg2 = x
-
-                            qz = random.randint(bg1, bg2)
-
-                            zl = [x, y, qz]
-
-                            zl.sort(reverse=True)
-                           
-                            z3 = int(abs(math.hypot(zl[0], zl[1])) * math.pi)
-                            zz = z3 | random.choice(zl)
-                            z = zz - (zz % z72)
-
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                        else:                       
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, grid_z)
-                    elif randomIt == 73:
-                        # SHE NEVER NOTICED
-                        if count % 2 == 0:
-                            mod_y = int(x * math.pi) | int(y * math.pi)
-                            mod_x = int(x * math.e) | int(y * math.e)
-
-                            z = mod_x & mod_y
-                            z = z - (z % tippingPoint)
-                        else:
-                            mod_y = int(x * math.e) | int(y * math.pi)
-                            mod_x = int(x * math.e) | int(y * math.pi)
-
-                            z = mod_x & mod_y
-                            z = z - (z % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 74:
-                        # AEROPLANE IN THE SEA WITH DARKNESS
-                        x74 = x - (x%4)
-                        y74 = y - (y%4)
-
-                        if count % 2 == 0:
-                            mod_y = int(x74 * math.pi) | int(y74 * math.pi)
-                            mod_x = int(x74 * math.e) | int(y74 * math.e)
-
-                            z = mod_x & mod_y
-                            z = z - (z % tippingPoint)
-                        else:
-                            mod_y = int(x74 * math.e) | int(y74 * math.pi)
-                            mod_x = int(x74 * math.e) | int(y74 * math.pi)
-
-                            z = mod_x & mod_y
-                            z = z - (z % tippingPoint)                  
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 75:
-                        # BIG SQUARE PUSSY
-                        i75 = tippingPoint
-
-                        if x % i75 == 0 or y % i75 == 0:
-                            z = 0
-                        else:
-                            mod_y = y - (y % tippingPoint)
-                            mod_x = x - (x % tippingPoint)
-
-                            z = (mod_y << 4) + mod_x
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 76:
-                        # SCOOL FENCE
-                        tippingPoint = 20
-
-                        i76 = random.randint(0, 25)
-                        skool = (i76,i76,i76)
-
-                        y76 = y - (y % tippingPoint)
-                        x76 = x - (x % tippingPoint)
-
-                        z = random.randint(1, len(choices))
-
-                        mod_y2 = abs(height - y) % tippingPoint
-                        mod_x = abs(x - y) % tippingPoint
-                        mod76 = tippingPoint // 2
-
-                        if abs(mod_x - mod76) < 2:
-                            z = 0
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, [skool], z)
-                        elif abs((x % tippingPoint) - mod_y2) < 1:
-                            z = 0
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, [skool], z)
-                        else:
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 77:
-                        # the echo of silence reverberates off the walls of my being
-                        # but no one can hear it out there
-                        # it's sad and dark and lonely in your casket
-                        # when there are no nail marks on the inside
-                        # and two miles of dirt above
-                        # i lived on a pile of rocks
-                        # where i'll die after the final reckoning
-                        # when the life drains from your body
-                        # and the earth's, and the universe
-                        # implodes
-                        if i % tippingPoint == 0:
-                            switcher = 1 - switcher
-
-                        if switcher == 0:                            
-                            mod_x = int(abs(math.hypot(x, y)))
-                            mod_x = mod_x - (mod_x % tippingPoint)                            
-                        else:
-                            mod_x = x + y - (x % tippingPoint) - (y % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 78:
-                        # BIG SQUARES NO TOE                       
-                        mod_y = y - (y % tippingPoint)
-                        mod_x = x - (x % tippingPoint)
-
-                        z = (mod_y << 4) + mod_x
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 79:
-                        # ALONE ON A FRIDAY NIGHT                        
-                        
-                        if variant == 1:
-                            if switcher == 0 or i % tippingPoint * 5 == 0:
-                                switcher = random.randint(1, 8)
-                        else:
-                            switcher = variant
-
-                        if switcher == 1:
-                            mod_x = x + y - (x % tippingPoint) - (y % tippingPoint)
-                        elif switcher == 2:
-                            mod_x = x + y - (x % tippingPoint) + (y % tippingPoint)
-                        elif switcher == 3:
-                            mod_x = x + y + (x % tippingPoint) - (y % tippingPoint)
-                        elif switcher == 4:
-                            mod_x = x + y + (x % tippingPoint) + (y % tippingPoint)
-                        elif switcher == 5:
-                            mod_x = x - y - (x % tippingPoint) - (y % tippingPoint)
-                        elif switcher == 6:
-                            mod_x = x - y - (x % tippingPoint) + (y % tippingPoint)
-                        elif switcher == 7:
-                            mod_x = x - y + (x % tippingPoint) - (y % tippingPoint)
-                        else:
-                            mod_x = x - y + (x % tippingPoint) + (y % tippingPoint)                 
-                                                
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                    elif randomIt == 80:
-                        # SWAPPER WHOPPER
-
-                        if mod_alg_value == 0:
-                            mod_alg_value = random.uniform(3,8)
-                            addState(f'mod_alg_value: {mod_alg_value}', None)                
-
-                        mod_z = x - y + (x % tippingPoint) + (y % tippingPoint)
-
-                        mod_y0 = y - (y % tippingPoint)
-
-                        mod_x2 = x if y != 0 else width - x
-
-                        mod_tp = tippingPoint if variant == 1 else variant
-
-                        if variant == 1:
-                            if count % 2 == 0:
-                                mod_x = int(mod_x2 * mod_alg_value) | int(y * mod_alg_value)
-                                mod_y = int(mod_x2 // mod_alg_value) | int(y // mod_alg_value)
-                            else:
-                                mod_x = int(mod_x2 * mod_alg_value) & int(y * mod_alg_value)
-                                mod_y = int(mod_x2 // mod_alg_value) & int(y // mod_alg_value)
-
-                            z = mod_x | mod_y | tippingPoint
-                            z = z - (z % tippingPoint)
-                        elif variant == 2:
-                            mod_x = int(mod_x2 * mod_alg_value) | int(y * mod_alg_value)
-                            mod_y = int(mod_x2 // mod_alg_value) | int(y // mod_alg_value)
-                            
-                            z = mod_x | mod_y | tippingPoint
-                            z = z - (z % tippingPoint)
-                        elif variant == 3:
-                            mod_x = int(mod_x2 * mod_alg_value) & int(y * mod_alg_value)
-                            mod_y = int(mod_x2 // mod_alg_value) & int(y // mod_alg_value)
-                            
-                            z = mod_x | mod_y | tippingPoint
-                            z = z - (z % tippingPoint)
-                        elif variant == 4:
-                            mod_x = int(mod_x2 * mod_alg_value) ^ int(y * mod_alg_value)
-                            mod_y = int(mod_x2 // mod_alg_value) ^ int(y // mod_alg_value)
-                            
-                            z = mod_x | mod_y | tippingPoint
-                            z = z - (z % tippingPoint)
-                        elif variant == 14:
-                            mod_x = int(mod_x2 * mod_alg_value) ^ int(y * mod_alg_value)
-                            mod_y = int(mod_x2 // mod_alg_value) ^ int(y // mod_alg_value)
-                            
-                            z = mod_x & mod_y & tippingPoint
-                            z = z - (z % tippingPoint)
-                        else:
-                            zz = (variant % 10)
-                            zz = zz if zz != 0 else tippingPoint
-
-                            if count % zz == 0:
-                                mod_x = int(mod_x2 * mod_alg_value) | int(y * mod_alg_value)
-                                mod_y = int(mod_x2 // mod_alg_value) | int(y // mod_alg_value)
-                            else:
-                                mod_x = int(mod_x2 * mod_alg_value) & int(y * mod_alg_value)
-                                mod_y = int(mod_x2 // mod_alg_value) & int(y // mod_alg_value)
-
-                            z = mod_x | mod_y | tippingPoint
-                            z = z - (z % tippingPoint)                        
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 81:
-                        # DIGITAL OPULENCE
-                        if count == 0:
-                            tp81x = random.randint(2, 8)
-                            tp81y = random.randint(4, 12)
-
-                        mod_x = x - (x % tp81x)
-                        mod_y = y - (y % tp81y)
-                        
-                        z = (mod_x << 16) | mod_y
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 82:
-                        # THAT PROBABLY LOOKS INSANE
-                        if count == 0:
-                            switcher = random.choice([1, -1])
-
-                        mod_x = int(x * math.pi) | int(x * math.pi)
-                        mod_y = int(y * math.e) | int(y * math.e)
-
-                        z = mod_x | mod_y
-                        #z = z - (z % tippingPoint)
-
-                        (mod_q, mod_r) = get_grid_vals(x, y, tippingPoint)
-                        mod_s = mod_q + (mod_r * switcher)
-                        
-                        i82 = y % tippingPoint
-                        i82_2 = x % tippingPoint
-
-                        i82_3 = (tippingPoint // 2)                        
-
-                        if (i82 <= i82_3 and i82_2 < i82_3) or ((i82 > (i82_3 + 1)) and (i82_2 >= (i82_3 + 1))):
-                            z = mod_s
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 83:
-                        lastColorsKept = colorsKept
-
-                        if count == 0:
-                            zchoices = [random.randint(2, 50) for i in range(6)]
-                            z3choices = [2 ** random.randint(1, 8) for i in range(5)]
-                            
-                            z1 = random.choice(zchoices)
-                            z2 = z1
-
-                            while z2 == z1:
-                                z2 = random.choice(zchoices)                              
-                        
-                        if count % 5 == 0 or x % 15 == 0 or y % 15 == 0:
-                            mod_x = math.sqrt(random.choice([z1, z2]))
-                                
-                            if mod_x == 0:
-                                mod_x = 1
-
-                            zAs = [int(x * mod_x),int(y * mod_x),int(x // mod_x),int(y // mod_x)]
-                            
-                            zA = random.choice(zAs)
-                            zB = random.choice(zAs)
-
-                            z = (zA ^ zB) | ((x | y) << 4)
-                            
-                            z = z % len(choices)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                    elif randomIt == 84:
-                        mod_y = y - (y % tippingPoint)
-                        mod_x = x - (x % tippingPoint)
-
-                        z = (mod_y << 4) + mod_x                        
-                                       
-                        # | 0 | 1 |
-                        # |---+---|                        
-                        # | 2 | 3 |
-                        
-                        mod_ff_x = int(x / 25)
-                        mod_ff_x = mod_ff_x % 3
-                        
-                        mod_ff_y = int(y / 25)
-                        mod_ff_y = mod_ff_y % 3
-                        
-                        mod_z = int(abs(math.hypot(x, y)))
-                        mod_z = mod_z - (mod_z % tippingPoint)                            
-                                                
-                        mod_q = x + y - (x % tippingPoint) - (y % tippingPoint)
-                        
-                        if mod_ff_x == 0:
-                            if mod_ff_y == 0:                            
-                                mod_84 = z
-                            elif mod_ff_y == 1:
-                                mod_84 = mod_z
-                            else:
-                                mod_84 = x ^ y
-                        elif mod_ff_x == 1:
-                            if mod_ff_y == 0:
-                                mod_84 = mod_q
-                            elif mod_ff_y == 1:
-                                mod_84 = x & y
-                            else:
-                                mod_84 = x | y
-                        else:
-                            if mod_ff_y == 0:
-                                mod_84 = mod_q - mod_z
-                            elif mod_ff_y == 1:
-                                mod_84 = mod_q & mod_z
-                            else:
-                                mod_84 = mod_q | mod_z
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_84)
-                    elif randomIt == 85:
-                        if count == 0:
-                            mod_x85 = random.randint(5, 15)
-                            mod_y85 = random.randint(4, mod_x85 + 10)
-                            mod_delta85 = random.randint(2, 8)
-                            
-                        mod_c = count % mod_delta85
-                        
-                        mod_x = x - (x % mod_x85 - mod_c)
-                        mod_y = y - (y % mod_y85 + mod_c)
-                        
-                        mod_z = ( mod_x << 2 ) | mod_y
-                        
-                        newcolour = get_kept_color_avoid_sides(colorsKept, choices, mod_z, limit=5)
-                        
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_z)
-                    elif randomIt == 86:
-                        # DEMIURGE OVERKILL
-
-                        if count == 0:
-                            mod_86 = random.random() * 10
-
-                        if count % 4 == 0:
-                            mod_x = int(x * mod_86) | int(y * mod_86)
-                            mod_y = int(x // mod_86) | int(y // mod_86)
-                            z = mod_x | mod_y | int(mod_86)
-                            z = z - (z % tippingPoint)
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                        elif count % 2 == 0:
-                            mod_x = int(x * mod_86) & int(y * mod_86)
-                            mod_y = int(x // mod_86) & int(y // mod_86)
-                            z = mod_x | mod_y | int(mod_86)
-                            z = z - (z % tippingPoint)
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
-                        else:
-                            if last_z == 0:
-                                z = y
-                                zz = x
-                                last_z = 1
-                            else:
-                                z = x
-                                zz = y
-                                last_z = 0
-                                
-                            mod_x = z - (z % tippingPoint)
-                            mod_y = zz - (zz % tippingPoint)
-
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
-                            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_y)
-                    elif randomIt == 87:
-                        # idk yet
-
-                        if mod_alg_value == 0:
-                            mod_alg_value = random.uniform(3,8)   
-
-                        mod_y = y - (y % tippingPoint)
-                        mod_x = x - (x % tippingPoint)
-
-                        z = (mod_y << 4) + mod_x                                                 
-
-                        # mod_z = x - y + (x % tippingPoint) + (y % tippingPoint)
-                        # mod_x2 = x if y != 0 else width - x
-                        # mod_tp = tippingPoint if variant == 1 else variant
-
-                        # if count % 2 == 0:
-                        #     mod_x = int(mod_x2 * mod_alg_value) | int(y * mod_alg_value)
-                        #     mod_y = int(mod_x2 // mod_alg_value) | int(y // mod_alg_value)
-                        # else:
-                        #     mod_x = int(mod_x2 * mod_alg_value) & int(y * mod_alg_value)
-                        #     mod_y = int(mod_x2 // mod_alg_value) & int(y // mod_alg_value)
-                        
-                        # z = mod_x | mod_y | tippingPoint
-                        # z = z - (z % tippingPoint)
-
-                        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+                    newcolour, choices, x, y, switcher = floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, height, variant, startx, starty, choicesChosen, count, i, switcher, colorsKept, timesUsed, conseq, last_z, zCol, mod_alg_value, pixdata, stmpdata, x, y, newcolour)
                         
                     #writeOperationToDisk(currentUID, f"x: {x} y: {y} stackDepth: {stackDepth} maxStackDepth: {maxStackDepth} newcolour: {newcolour}")
-                    pixdata[x,y] = newcolour                    
+                    pixdata[x,y] = newcolour
                         
-                    count += 1        
+                    count += 1
                     stackDepth += 1
-                   
+
                     if maxStackDepth == 0 or stackDepth < maxStackDepth:
-                        if debugMode:
-                            appended = [False,False,False,False]
-                        
-                        if x-1 >= 0 and x-1 < img.size[0] and y < img.size[1] and hash((x-1,y)) not in touched and targetCheck(pixdata[x-1,y], targetcolour, compFunc):
+                        # if canChange(bitboard, x-1, y, 1):
+                        #     if x-1 >= 0 and x-1 < img.size[0] and y < img.size[1] and targetCheck(pixdata,x-1,y, targetcolour, compFunc):
+                        #         touchThatBit(bitboard, x-1, y, 1)
+
+                        # if canChange(bitboard, x+1, y, 1):
+                        #     if x+1 < img.size[0] and y < img.size[1] and targetCheck(pixdata,x+1,y, targetcolour, compFunc):
+                        #         touchThatBit(bitboard, x+1, y, 1)
+
+                        # if canChange(bitboard, x, y-1, 1):
+                        #     if y-1 >= 0 and x < img.size[0] and y-1 < img.size[1] and targetCheck(pixdata,x,y-1, targetcolour, compFunc):
+                        #         touchThatBit(bitboard, x, y-1, 1)
+
+                        # if canChange(bitboard, x, y+1, 1):
+                        #     if x < img.size[0] and y+1 < img.size[1] and targetCheck(pixdata,x,y+1, targetcolour, compFunc):
+                        #         touchThatBit(bitboard, x, y+1, 1)
+
+                        if x-1 >= 0 and x-1 < img.size[0] and y < img.size[1] and hash((x-1,y)) not in touched and targetCheck(pixdata,x-1,y, targetcolour, compFunc):
                             workpile.append((x-1,y,stackDepth))
-                            if debugMode:
-                                appended[0] = True
 
-                        if x+1 < img.size[0] and y < img.size[1] and hash((x+1,y)) not in touched and targetCheck(pixdata[x+1,y], targetcolour, compFunc):
+                        if x+1 < img.size[0] and y < img.size[1] and hash((x+1,y)) not in touched and targetCheck(pixdata,x+1,y, targetcolour, compFunc):
                             workpile.append((x+1,y,stackDepth))
-                            if debugMode:
-                                appended[1] = True
 
-                        if y-1 >= 0 and x < img.size[0] and y-1 < img.size[1] and hash((x,y-1)) not in touched and targetCheck(pixdata[x,y-1], targetcolour, compFunc):
+                        if y-1 >= 0 and x < img.size[0] and y-1 < img.size[1] and hash((x,y-1)) not in touched and targetCheck(pixdata,x,y-1, targetcolour, compFunc):
                             workpile.append((x,y-1,stackDepth))
-                            if debugMode:
-                                appended[2] = True
 
-                        if x < img.size[0] and y+1 < img.size[1] and hash((x,y+1)) not in touched and targetCheck(pixdata[x,y+1], targetcolour, compFunc):
+                        if x < img.size[0] and y+1 < img.size[1] and hash((x,y+1)) not in touched and targetCheck(pixdata,x,y+1, targetcolour, compFunc):
                             workpile.append((x,y+1,stackDepth))
-                            if debugMode:
-                                appended[3] = True
 
-                        if debugMode:                            
-                            rootLogger.error(str(x) + "," + str(y) + "|" + str(stackDepth))
-                            rootLogger.error(str(img.size))
-                            rootLogger.error(str(hash((x-1,y)) not in touched))
-                            rootLogger.error(str(hash((x+1,y)) not in touched))
-                            rootLogger.error(str(hash((x,y-1)) not in touched))
-                            rootLogger.error(str(hash((x,y+1)) not in touched))
-                            rootLogger.error(str(targetCheck(pixdata[x-1,y], targetcolour, compFunc)))
-                            rootLogger.error(str(targetCheck(pixdata[x+1,y], targetcolour, compFunc)))
-                            rootLogger.error(str(targetCheck(pixdata[x,y-1], targetcolour, compFunc)))
-                            rootLogger.error(str(targetCheck(pixdata[x,y+1], targetcolour, compFunc)))
-                            rootLogger.error(str(appended))
-                            
+                    if isItTimeToDump(dumpEvery, iPoint):
+                        colorPrint.print_custom_palette(143, f"\t[ff dump: {writeTimeCheck()} --> ")
+                        colorPrint.print_custom_palette(144, f"\tx: {x}, y: {y}")
+                        colorPrint.print_custom_palette(149, f"\tstackDepth: {stackDepth}, maxStackDepth: {maxStackDepth}")
+                        #colorPrint.print_custom_palette(141, f"\tbitboard[x,y]: {bitboard[x,y]}")
+                        colorPrint.print_custom_palette(148, f"\tdump done ----------------------]")
+
             except Exception as e:
                 logException(e)
+        
+        if isItTimeToDump(dumpEvery, iPoint):            
+            colorPrint.print_custom_palette(7, f"| floodfill: workpile loop end @ {iPoint} --- {writeTimeCheck()} ---->")            
+            colorPrint.print_custom_palette(229, f"| point: {[x,y,stackDepth]}, stackDepth: {stackDepth}, maxStackDepth: {maxStackDepth}")
+            colorPrint.print_custom_palette(217, f"| ------------------ {writeTimeCheck()} ------------------")
+
+        iPoint += 1
+
+        #honk = getBitboardNext(bitboard, 1)
 
     if showFloodedBoxes == True or showFloodedBoxes in ["True", "true"]:
         for zX in range(minX, maxX):
@@ -3254,9 +2266,1378 @@ def floodfill(img, xystart,
             pixdata[minX, zY] = (255,255,0)
             pixdata[maxX, zY] = (255,0,0)
 
-    addState(f'colorsKept: {colorsKept}')
-                     
+    # addState(f'colorsKept: {colorsKept}')
+
+    colorPrint.print_custom_palette(228, f"| floodfill complete ------ {writeTimeCheck()} ----]")
+
     return count
+
+ffSpecificState = 0
+ffSpecificState2 = 0
+ffSpecificState3 = 0
+ffSpecificState4 = 0
+ffSpecificState5 = 0
+
+def resetFloodfillStates():
+    global ffSpecificState
+    global ffSpecificState2
+    global ffSpecificState3
+    global ffSpecificState4
+    global ffSpecificState5
+
+    ffSpecificState = 0
+    ffSpecificState2 = 0
+    ffSpecificState3 = 0
+    ffSpecificState4 = 0
+    ffSpecificState5 = 0
+
+def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, height, variant, startx, starty, choicesChosen, count, i, switcher, colorsKept, timesUsed, conseq, last_z, zCol, mod_alg_value, pixdata, stmpdata, x, y, newcolour):
+    global ffSpecificState
+    global ffSpecificState2
+    global ffSpecificState3
+    global ffSpecificState4
+    global ffSpecificState5
+
+    if stamp != None:
+        # take the color from the stamp (map it somehow)
+        xOff = x % (stamp.size[0])
+        yOff = y % (stamp.size[1])
+
+        newcolour = stmpdata[xOff, yOff]
+
+        if stampTrans != None:
+            if stampTrans == newcolour:
+                newcolour = pixdata[x,y]
+                        
+    elif randomIt == 1:
+        # random
+        if variant == 1 or variant > 15:
+            if choices == []:
+                newcolour = (random.randint(0,255),
+                                            random.randint(0,255),
+                                            random.randint(0,255))
+            else:
+                newcolour = random.choice(choices)                  
+        elif variant < 5:
+            z = (y << variant) + x
+
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+        elif variant < 10:
+            z = x & y & variant
+
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+        elif variant <= 15:
+            z = (x | y) & variant
+
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+                        
+    elif randomIt == 2:
+        # the tipping point
+        if choices == []:
+            newcolour = primaryColors[switcher]
+        else:
+            newcolour = choices[switcher]
+                            
+        i += 1
+
+        if i % tippingPoint == 0:
+            switcher += 1
+
+        if choices == []:    
+            if switcher > len(primaryColors) - 1:
+                switcher = 0
+        else:
+            if switcher > len(choices) - 1:
+                switcher = 0
+                                
+    elif randomIt == 3:
+        # night random
+        oldcolour = primaryColors[switcher]
+        newcolour = (random.randint(0,128),
+                                     random.randint(0,50),
+                                     random.randint(0,100))
+        i += 1
+        if i % tippingPoint == 0:
+            switcher += 1
+
+        if switcher > len(primaryColors) - 1:
+            switcher = 0
+
+        if random.randint(0, 100) == 1:
+            newcolour = (random.randint(0,255),
+                                     random.randint(0,255),
+                                     random.randint(0,255))
+    elif randomIt == 4:
+        # dark noise
+        newcolour = (random.randint(0,100),
+                                     random.randint(0,128),
+                                     random.randint(0,128))
+    elif randomIt == 5:
+        # bar grid
+        if count == 0:
+            ffSpecificState = [random.choice(choices),random.choice(choices),random.choice(choices)]
+            random.shuffle(ffSpecificState)
+                        
+        if x % (3 - iLoveThatGirl) == 0 or x % (7 - iLoveThatGirl) == 0:
+            newcolour = ffSpecificState[0]
+        elif y % (5 - iLoveThatGirl) == 0:
+            newcolour = ffSpecificState[1]
+        elif x % 5 == 0:
+            newcolour = random.choice(choices)
+        else:
+            newcolour = ffSpecificState[2]
+    elif randomIt == 6:
+        # EGA noise
+        if choicesChosen:
+            newcolour = random.choice(choices)
+        else:
+            newcolour = random.choice(primaryColors)
+    elif randomIt == 7:
+        # long bars
+        if variant == 1:
+            mod_x = (count % tippingPoint == 0)
+        elif variant == 0:
+            mod_x = (count % (tippingPoint//2) == 0)
+        else:
+            mod_x = count % variant == 0
+
+        if mod_x:
+            newcolour = random.choice(choices)
+    elif randomIt == 8:
+        # the color of a tv tuned to a dead channel
+        newcolour = (200, random.randint(0, 255), 200)
+        newclist = [newcolour[0],newcolour[1],newcolour[2]]                        
+        random.shuffle(newclist)
+        newcolour = (newclist[0],newclist[1],newclist[2])
+    elif randomIt == 9:
+        # green noise
+        if random.randint(0,2) == 1:
+            if choicesChosen:
+                newcolour = random.choice(choices)
+            else:                            
+                newcolour = (random.randint(0, 25),
+                                             random.randint(128, 200),
+                                             random.randint(0, 225))
+    elif randomIt == 10:
+        # bar john
+        if variant == 1:
+            mod_x = 0
+            mod_y = y
+
+            if count == mod_x or x % tippingPoint == mod_x or mod_y % tippingPoint == mod_x:
+                newcolour = random.choice(choices)
+        elif variant == 0:
+            mod_x = 1
+            mod_y = random.randint(0, tippingPoint)
+
+            if count == mod_x or x % tippingPoint == mod_x or mod_y % tippingPoint == mod_x:
+                newcolour = random.choice(choices)
+        elif variant < 6:
+            mod_x = variant - 1
+            mod_y = y
+
+            if count == mod_x or x % tippingPoint == mod_x or mod_y % tippingPoint == mod_x:
+                newcolour = random.choice(choices)
+        else:
+            mod_x = x - (x % 3)
+            mod_y = y - (y % (variant * 10))
+
+            z = (mod_y << 8) | mod_x
+
+            mod_xond1 = (count == 0 or count % variant == 0)
+            mod_xond2 = (x % variant == 0)
+            mod_xond3 = (y % variant == 0)
+
+            if mod_xond1 or mod_xond2 or mod_xond3:
+                z = count
+                            
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 11:
+        # diamond hatch
+        newcolour = choices[ffSpecificState2]
+        ffSpecificState += 1
+
+        if ffSpecificState % tippingPoint == 0:
+            ffSpecificState2 += 1
+            
+        if ffSpecificState2 > len(choices) - 1:
+            ffSpecificState2 = 0
+    elif randomIt == 12:
+        # wacky noise
+        if x % (4 - iLoveThatGirl) == 0 or x % (6 - iLoveThatGirl) == 0:
+            newcolour = choices[0]                            
+        elif y % (3 - iLoveThatGirl) == 0:
+            newcolour = choices[1]                            
+        else:
+            newcolour = choices[2]
+
+        if x % 5 == 0 or y % 5 == 0:
+            random.shuffle(choices)
+    elif randomIt == 13:
+        # T_H_E__S_H_U_F_F_L_E_R______________________________________________
+        if count % tippingPoint == 0 or (y % tippingPoint == 0):
+            if len(choices) == 0:
+                nclist = list(newcolour)
+                random.shuffle(nclist)
+                newcolour = (nclist[0], nclist[1], nclist[2])
+            else:
+                newcolour = random.choice(choices)
+    elif randomIt == 14:
+        # lil bars
+        if count % 5 == 0:
+            newcolour = random.choice(choices)
+    elif randomIt == 15:
+        # purple noise
+        if count == 0 or count % 7 == 0:
+            if choicesChosen:
+                ffSpecificState = random.choice(choices)
+                ffSpecificState = [ffSpecificState[0], ffSpecificState[1], ffSpecificState[2]]
+            else:                            
+                ffSpecificState = [random.randint(128, 200),
+                                    random.randint(0, 25),
+                                    random.randint(0, 225)]
+
+        if count % 15 == 0:
+            random.shuffle(ffSpecificState)
+                            
+        newcolour = (ffSpecificState[0], ffSpecificState[1], ffSpecificState[2])
+    elif randomIt == 16:
+        # bland noise
+        if (count == 0 or count % 15 == 0) and choicesChosen:                            
+            newcolour = random.choice(choices)
+
+        a = [newcolour[0], newcolour[1], newcolour[2]]                    
+        random.shuffle(a)
+        newcolour = (a[0], a[1], a[2])
+    elif randomIt == 17:
+        # soldiers
+        if count == 0:
+            if len(choices) == 0:
+                choices = [primaryColors[0], primaryColors[1], primaryColors[2]]
+                                
+            random.shuffle(choices)
+        else:
+            if y % 20 == 0:
+                random.shuffle(choices)
+                            
+        newcolour = choices[0]
+    elif randomIt == 18:
+        # child soldiers
+        mod_x = x - (x % 10)
+                        
+        if y % 8 == 0 or (x % 10 == 0 and y % 8 != 0):
+            random.shuffle(choices)
+            newcolour = choices[0]
+            colorsKept[str(mod_x)] = newcolour
+        else:                            
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 19:
+        # horizontal bars
+        mod_y = y - (y % 5)
+        if str(mod_y) not in colorsKept:
+            if len(choices) == 0:
+                newcolour = (random.randint(0,255),
+                                             random.randint(0,255),
+                                             random.randint(0,255))
+            else:
+                newcolour = random.choice(choices)
+
+            colorsKept[str(mod_y)] = newcolour
+        else:
+            newcolour = colorsKept[str(mod_y)]
+    elif randomIt == 20:
+        # small flannel
+        if last_z == 0:
+            z = y
+            last_z = 1
+        else:
+            z = x
+            last_z = 0
+                            
+        mod_x = z - (z % tippingPoint)
+                        
+        if str(mod_x) not in colorsKept:
+            newcolour = random.choice(choices)
+                            
+            colorsKept[str(mod_x)] = newcolour
+        else:
+            newcolour = colorsKept[str(mod_x)]    
+    elif randomIt == 21:
+        # vertical bars
+        mod_x = x - (x % 5)
+        if str(mod_x) not in colorsKept:
+            newcolour = random.choice(choices)
+                            
+            colorsKept[str(mod_x)] = newcolour
+        else:
+            newcolour = colorsKept[str(mod_x)]
+    elif randomIt == 22:
+        # D E A D N I G H T S K Y ____________________________
+        # copy of 3 initially
+        if count == 0:
+            ffSpecificState = 0
+
+        if ffSpecificState == 0:
+            newcolour = random.choice(choices)
+            
+            ffSpecificState2 += 1
+            if ffSpecificState2 % tippingPoint == 0:
+                switcher += 1
+
+            if switcher > len(primaryColors) - 1:
+                switcher = 0
+
+            x3 = random.randint(0, 100)
+            
+            if x3 == 1:
+                newcolour = (0,0,random.randint(0,150))
+            elif x3 > 75:
+                newcolour = random.choice(choices)
+
+            for jj in range(0, 3):
+                if newcolour[jj] > 150:
+                    newcolour = replace_at_index(newcolour, jj, newcolour[jj] - 100)
+
+            ffSpecificState = 1
+        else:
+            newcolour = random.choice(choices)
+            ffSpecificState = 0
+    elif randomIt == 23:
+        # D E A D N I G H T G R O U N D ______________________
+        if variant == 1:
+            variant_d1 = 50
+            variant_d2 = -3
+            variant_d3 = -1
+        elif variant == 0:
+            variant_d1 = random.randint(1, 100)
+            variant_d2 = -3
+            variant_d3 = -2
+        else:
+            variant_d1 = int(variant * 3)
+            variant_d2 = abs(variant_d1) * -1
+            variant_d3 = abs(variant) * -1
+
+        switcher = random.randint(0, 2)
+        amount = 1 if random.randint(0, 1) == 1 else -1
+                        
+        if amount == 1 and newcolour[switcher] > variant_d1:
+            amount = -1
+
+        conseq += amount
+
+                        # don't keep going the same direction all the time
+        if conseq < variant_d2 or conseq > abs(variant_d2):
+            amount = amount * variant_d3
+            conseq = amount
+                        
+        if variant == 1:
+            newcolour = replace_at_index(newcolour, switcher, newcolour[switcher] + amount)
+            a = [newcolour[0], newcolour[1], newcolour[2]]
+            random.shuffle(a)
+            newcolour = (a[0], a[1], a[2])
+        else:
+            if variant < 5:
+                zzz = amount + conseq
+                (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, zzz)
+            else:
+                zzz = amount + (conseq % tippingPoint)
+                (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, zzz)
+    elif randomIt == 24:
+                        # F U Z Z Y _ F L A N N E L __________________________
+        if last_z == 0:
+            z = y
+            zz = x
+            last_z = 1
+        else:
+            z = x
+            zz = y
+            last_z = 0
+                            
+        mod_x = z - (z % tippingPoint)
+        mod_y = zz - (zz % tippingPoint)
+                        
+        if str(mod_x) not in colorsKept:
+            newcolour = random.choice(choices)
+                            
+            colorsKept[str(mod_x)] = newcolour
+
+            if str(mod_y) not in colorsKept:
+                colorsKept[str(mod_y)] = newcolour
+        else:
+            newcolour = colorsKept[str(mod_x)]                                             
+    elif randomIt == 25:
+                        # T I M E _ L I M I T ________________________________
+        mod_x = x - (x % tippingPoint)
+        if str(mod_x) not in colorsKept:
+            if len(choices) == 0:
+                newcolour = (random.randint(0,255),
+                                             random.randint(0,255),
+                                             random.randint(0,255))
+            else:
+                newcolour = random.choice(choices)
+
+            colorsKept[str(mod_x)] = newcolour
+            timesUsed[str(mod_x)] = 1
+        else:
+            times = timesUsed[str(mod_x)]
+
+            if times > tippingPoint:
+                if len(choices) == 0:
+                    newcolour = (random.randint(0,255),
+                                             random.randint(0,255),
+                                             random.randint(0,255))
+                else:
+                    newcolour = random.choice(choices)
+
+                colorsKept[str(mod_x)] = newcolour
+
+                timesUsed[str(mod_x)] = 1
+            else:
+                newcolour = colorsKept[str(mod_x)]
+                timesUsed[str(mod_x)] = (times + 1)
+    elif randomIt == 26:
+                        # 8 0 S  T R I P
+        z = abs(x % tippingPoint - y % tippingPoint)
+                        
+        if str(z) not in colorsKept:
+            newcolour = random.choice(choices)
+                            
+            colorsKept[str(z)] = newcolour
+        else:
+            newcolour = colorsKept[str(z)]
+    elif randomIt == 27:
+                        # D_E_A_D__M_A_L_L__H_A_U_N_T_I_N_G______
+        mod_y = y % tippingPoint                       
+        mod_x = x % tippingPoint
+
+        if count % tippingPoint == 0:
+            newcolour = random.choice(choices)
+            colorsKept[str(mod_y)] = newcolour
+            colorsKept[str(mod_x)] = newcolour
+        elif str(mod_y) not in colorsKept:
+            newcolour = random.choice(choices)
+            colorsKept[str(mod_y)] = newcolour
+            colorsKept[str(mod_x)] = newcolour
+        elif str(mod_x) not in colorsKept:
+            newcolour = random.choice(choices)
+            colorsKept[str(mod_y)] = newcolour
+            colorsKept[str(mod_x)] = newcolour
+        else:                            
+            newcolour = random.choice([colorsKept[str(mod_y)], colorsKept[str(mod_x)]])
+    elif randomIt == 28:
+                        # BIG ___ GRID __________________________________________________
+        if count == 0:                            
+            switcher = random.choice([1, -1])
+
+        (mod_x, mod_y) = get_grid_vals(x, y, tippingPoint)
+                        
+        mod_z = mod_y + (mod_x * switcher)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_z)
+    elif randomIt == 29:
+                        # 8 bit sq outline
+        if x % 5 == 0 or y % 5 == 0:
+            newcolour = (0,0,0)
+        else:
+            mod_x = x + y - (y % tippingPoint) - (x % tippingPoint)
+                            
+            if str(mod_x) not in colorsKept:
+                if len(choices) == 0:
+                    r = random.randint(1, 255)
+                    g = random.randint(r-1, 255)
+                    b = random.randint(0, g)
+                    rgb = [r, g, b]
+                                
+                    newcolour = (random.choice(rgb), random.choice(rgb), random.choice(rgb))
+                else:
+                    newcolour = random.choice(choices)
+                                
+                colorsKept[str(mod_x)] = newcolour
+            else:
+                newcolour = colorsKept[str(mod_x)]
+    elif randomIt == 30:
+        # P_I_G__G_R_I_D_______________________________________________________________________
+        if count == 0:
+            ffSpecificState2 = random.randint(5, 15)
+            ffSpecificState = random.choice([1, -1])
+            ffSpecificState3 = random.choice([2, 3, 4])
+
+        (mod_x, mod_y) = get_grid_vals(x, y, ffSpecificState2)
+                        
+        mod_z = mod_y + (mod_x * ffSpecificState)
+
+        if x % (ffSpecificState2 * ffSpecificState3) == 0 or y % (ffSpecificState2 * ffSpecificState3) == 0:
+            mod_z = 999
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_z)
+    elif randomIt == 31:
+        # M_E_L_T_I_N_G__P_O_T_________________________________________________________________
+        x3 = x - (x % 8)
+        y3 = y - (y % 8)
+        z31 = x3 & y3
+                        
+        if count == 0:
+            ffSpecificState2 = random.randint(5, 10)
+            ffSpecificState = 0
+        elif random.randint(0, ffSpecificState2) == 0:
+            ffSpecificState = random.randint(0, len(choices))
+
+        mod_x = str(ffSpecificState) + "_" + str(z31)
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 32:
+                        # SOUTHEAST CRUMBO                        
+        mod_x = x - y + (x % tippingPoint//2) + (y % tippingPoint//2)                        
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 33:
+        # TODDLERS TODDLERS TODDLERS
+        if count == 0:
+            ffSpecificState2 = random.randint(1, 5) * 5
+
+        mod_x = y - (y % ffSpecificState2)
+                        
+        if count == 0:
+            ffSpecificState = 0
+            newcolour = random.choice(choices)
+        else:
+            if ffSpecificState != mod_x:
+                newcolour = random.choice(choices)
+
+        ffSpecificState = mod_x
+    elif randomIt == 34:
+                        # U_N_I_F_O_R_M____________________________________________________________________________
+        if count == 0:
+            for c in choices:
+                if str(c) not in timesUsed:
+                    timesUsed[str(c)] = 0
+                            
+        newcolour = random.choice(choices)
+        if str(newcolour) not in timesUsed:
+            timesUsed[str(newcolour)] = 0
+                                
+        thisused = timesUsed[str(newcolour)]
+
+        minUsed = thisused                        
+
+        for p in timesUsed:
+            if timesUsed[p] < minUsed:
+                minUsed = timesUsed[p]
+                newcolour = eval(p)
+
+        timesUsed[str(newcolour)] += 1
+    elif randomIt == 35:
+                        # S_L_O_W__C_H_A_N_G_E_S_________________________________________________________--__-_____
+        if not choicesChosen:
+            if count == 0:
+                direction = 1
+                newcolour = random.choice(choices)
+            else:
+                iThis = random.randint(0, 2)
+
+                if newcolour[iThis] + direction > 255 or newcolour[iThis] + direction < 0:
+                    direction *= -1
+                                    
+                newcolour = replace_at_index(newcolour, iThis, newcolour[iThis] + direction)
+        else:
+            mod_x = x - (x % 5)
+            mod_x2 = (x - 5) - ((x-5)%5)
+
+            mod_x2c = 0
+
+            if str(mod_x) in colorsKept:
+                newcolour = colorsKept[str(mod_x)]
+            else:
+                if str(mod_x2) in colorsKept:
+                    mod_x2c = colorsKept[str(mod_x2)]
+                            
+                newcolour = random.choice(choices)
+
+                while newcolour == mod_x2c:
+                    newcolour = random.choice(choices)
+
+                colorsKept[str(mod_x)] = newcolour
+    elif randomIt == 36:
+                        # B_A_R__S_C_R_E_W________________________________________________________
+        mod_x = x - (x % tippingPoint) + (random.randint(-2, 2) * tippingPoint)
+
+        if mod_x < 0:
+            mod_x = 0
+                            
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 37:
+                        # AND MOD
+        mod_x = x & y
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 38:
+                        # OR MOD
+        mod_x = x | y
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 39:
+                        # EXP MOD
+        mod_x = x ^ y
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 40:
+                        # MODDLEDEE
+        mod_x = (x - (x % tippingPoint)) & (y - (y % tippingPoint))
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 41:
+                        # MODDLEDUM
+        mod_x = (x - (x % tippingPoint)) | (y - (y % tippingPoint))
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 42:
+                        # HIGH INDIAN
+        mod_x = int(abs(math.sin(x) + math.sin(y)) * 100)
+        mod_x = mod_x - (mod_x % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 43:
+                        # MUSHROOM EXPRESS
+        mod_x = int(abs(math.sin(x) + math.cos(y)) * 100)
+        mod_x = mod_x - (mod_x % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 44:
+                        # LUIGI IN THE SKY WITH DIAMONDS
+        mod_x = int(abs(math.cos(x) + math.sin(y)) * 100)
+        mod_x = mod_x - (mod_x % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 45:
+                        # KNEE FOLDER BURIED IN THE TUNDRA
+        mod_x = int(abs(math.sin(x) + math.cos(y)) * 100)
+        mod_y = int(abs(math.cos(x) + math.sin(y)) * 100)
+        mod_z = random.choice([mod_x, mod_y])
+        mod_z = mod_z - (mod_z % tippingPoint)                        
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_z)
+    elif randomIt == 46:
+                        # ARC EXPLOSION
+        mod_x = int(abs(math.hypot(x, y)))
+        mod_x = mod_x - (mod_x % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 47:
+                        # SATURN'S BIRTHDAY
+        mod_x = int(abs(math.log1p(x) + math.log1p(y)) * 250)
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 48:
+                        # CIRCLE 8
+        mod_x = int(abs(math.exp(x % tippingPoint))) + int(abs(math.exp(y % tippingPoint)))
+        mod_x = mod_x - (mod_x % tippingPoint)
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 49:
+        # 4D FLANNEL
+        if count == 0:
+            ffSpecificState = 0
+
+        if ffSpecificState == 0:
+            if y > x:
+                if y == 0:
+                    y = 1
+                mod_x = (x % y) ^ len(choices)
+            elif y == x:
+                if y == 0:
+                    y = 1
+                mod_x = (x+1 % y) ^ len(choices)
+            else:
+                if x == 0:
+                    x = 1
+                mod_x = (y % x) ^ len(choices)
+
+            ffSpecificState = 1
+        elif ffSpecificState == 1:
+            mod_x = x ^ y
+            ffSpecificState = 2
+        elif ffSpecificState == 2:
+            mod_x = int(abs(math.hypot(x, y)))
+            ffSpecificState = 0
+            
+        mod_x = mod_x - (mod_x % tippingPoint)
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 50:
+                        # PUSH WALLPAPER 
+        mod_x = (x ^ y) % len(choices)
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 51:
+                        # CRAYON NUKE
+        mod_x = int(abs(math.hypot(startx-x, starty-y)))
+        mod_x = mod_x - (mod_x % tippingPoint)
+
+        mod_y = int(abs(math.log1p(x) - math.log1p(y)) * abs(math.log1p(x) + math.log1p(y)))
+
+        if count % 2 == 0:
+            mod_z = mod_x
+        else:
+            mod_z = mod_y
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_z)
+    elif randomIt == 52:
+                        # THE SMELL OF BLUEBERRY MARKERS
+        mod_x = x ^ y ^ count
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 53:
+                        # HEROIN FROM TOPANGA                        
+        (mod_x, mod_y) = get_grid_vals(x, y, tippingPoint)
+
+        mod_x = ((y ^ x) % 25) & (mod_y | mod_x)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 54:
+                        # RESOGROVE FINISH
+        mod_x = ((x ^ y) & (int(time.time() * 150) % 10))
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 55:
+                        # N_A_T_I_V_E___B_L_A_N_K_E_T____________________
+        mod_x = int(abs(math.hypot(x, y))) ^ x
+        mod_x = mod_x - (mod_x % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 56:
+                        # TRY BALL MEAT
+        if y > x:
+            mod_x = int(abs(math.hypot(y, x))) | x
+        else:
+            mod_x = int(abs(math.hypot(x, y))) | y
+                            
+        mod_x = mod_x - (mod_x % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 57:
+                        # TURN THE KNOB
+        z = random.choice([x, y])
+        mod_x = int(abs(math.hypot(x, y))) | z
+        mod_x = mod_x - (mod_x % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 58:
+                        # X MARKS THE X
+        mod_x = x ^ y
+        mod_x = mod_x - (mod_x % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 59:
+                        # JUTTING URANUS
+        mod_x = int(abs(math.hypot(x, y)) * math.pi)                        
+                        
+        z = mod_x ^ y
+        z = z - (z % tippingPoint)
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 60:
+                        # TINY DECO
+        if y > x:
+            mod_x = int(abs(math.hypot(y, x)) * math.pi)                        
+                            
+            z = mod_x ^ x
+        else:
+            mod_x = int(abs(math.hypot(x, y)) * math.pi)                        
+                        
+            z = mod_x ^ y
+                            
+        z = z - (z % tippingPoint)
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 61:
+                        # ONCE I SHOT GOD ON BROADWAY
+        if random.randint(0, 1) == 0:
+            mod_x = x & y
+        else:
+            mod_x = x | y
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 62:
+                        # YEAH
+        z = random.randint(0, 1)
+                        
+        if (y > x and z == 0) or (x > y and z == 1):
+            mod_x = x & y
+        else:
+            mod_x = x | y
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 63:
+        # ARKY BARKY
+        if count == 0:
+            ffSpecificState = 0
+
+        if ffSpecificState == 0:
+            mod_x = int(abs(math.hypot(x, y)))
+            mod_x = mod_x - (mod_x % tippingPoint)
+            ffSpecificState = 1
+        elif ffSpecificState == 1:
+            mod_x = int(abs(math.log1p(x) - math.log1p(y)) * 25)
+            ffSpecificState = 2
+        elif ffSpecificState == 2:
+            mod_x = x ^ y
+            ffSpecificState = 3
+        elif ffSpecificState == 3:
+            mod_x = x & y
+            ffSpecificState = 0
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 64:
+        # D_I_R_T_Y___C_A_R_P_E_T_________________________
+        if count == 0:
+            ffSpecificState = 1
+            ffSpecificState2 = tippingPoint
+
+        if ffSpecificState >= 5:
+            mod_x = x ^ y
+                        
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)                            
+            ffSpecificState = 1                           
+        else:
+            tippingPoint = ffSpecificState2 * ffSpecificState
+            mod_x = x + y - (x % tippingPoint) - (y % tippingPoint)
+                        
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+            ffSpecificState += 1
+    elif randomIt == 65:
+        # UNIQUE VAN FIBER
+        if count == 0:
+            ffSpecificState = 0
+            ffSpecificState3 = 5
+            ffSpecificState2 = tippingPoint
+
+        if ffSpecificState3 <= 0:
+            ffSpecificState3 = 5
+                            
+        tippingPoint = ffSpecificState2 * ffSpecificState3
+                        
+        if ffSpecificState == 0:
+            mod_x = (x - (x % tippingPoint)) & (y - (y % tippingPoint))
+            ffSpecificState = 1
+        else:
+            mod_x = (x - (x % tippingPoint)) | (y - (y % tippingPoint))
+            ffSpecificState = 0
+            ffSpecificState3 -= 1
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 66:
+        # ?_??_???_????_?????________________________________
+        mod_x = int(x * math.pi) | int(y * math.pi)
+        mod_y = int(x * math.e) | int(y * math.e)
+
+        z = mod_x & mod_y
+        z = z - (z % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 67:
+        # P_L_A_Y_I_N_G___T_H_E____S_T_A_R______________________
+        if count == 0:
+            zchoices = [2, 3, 5, 7, 11, 47]
+            z3choices = [1, 2, 4, 8, 16]
+            
+            ffSpecificState = random.choice(zchoices)
+            ffSpecificState2 = ffSpecificState
+
+            while ffSpecificState2 == ffSpecificState:
+                ffSpecificState2 = random.choice(zchoices)
+
+            ffSpecificState3 = random.choice(z3choices)
+            ffSpecificState4 = ffSpecificState3
+            ffSpecificState5 = ffSpecificState3
+
+            while ffSpecificState4 == ffSpecificState3:
+                ffSpecificState4 = random.choice(z3choices)
+
+            while ffSpecificState5 == ffSpecificState3:
+                ffSpecificState5 = random.choice(z3choices)
+                
+        if count % 2 == 0:
+            mod_x = math.sqrt(ffSpecificState)
+        else:
+            mod_x = math.sqrt(ffSpecificState2)
+            
+        z8 = int(x * mod_x) ^ int(y * mod_x)
+        z9 = int(x * mod_x) | int(y // mod_x)
+        z7 = x & y
+
+        z = (z8 & z9) | z7 | ffSpecificState3 | ffSpecificState4 | ffSpecificState5
+        z = z - (z % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 68:
+                        # T_H_E_ F_E_E_L_I_N_G_S_ N_E_V_E_R_ T_O_L_D__________-__________---_____                        
+        if count % 2 == 0:
+                            # 66
+            mod_x = int(x * math.pi) | int(y * math.pi)
+            mod_y = int(x * math.e) | int(y * math.e)
+
+            z = mod_x & mod_y
+            z = z - (z % tippingPoint)                            
+        else:
+            z = x ^ y                            
+                            
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 69:
+                        # NICE.
+        if count % 2 == 0:
+            mod_x = int(x * 6.969) | int(y * 6.969)
+            mod_y = int(x // 6.969) | int(y // 6.969)
+        else:
+            mod_x = int(x * 6.969) & int(y * 6.969)
+            mod_y = int(x // 6.969) & int(y // 6.969)
+                        
+        z = mod_x | mod_y | 69
+        z = z - (z % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 70:
+                        # EL DITHERO ___________________________________
+        if count % 2 == 0:
+            mod_x = int(abs(math.hypot(x, y))) ^ x                        
+        else:
+            mod_x = x ^ y
+
+        mod_x = mod_x - (mod_x % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 71:
+                        # CUBE 5: THE FINAL CUBING               
+        if len(zCol) <= 0:
+            for i71 in range(0, len(choices)):
+                zCol.append(i71)
+                            
+            random.shuffle(zCol)
+
+        mod_x2 = x - (x % 2)
+        mod_y2 = y - (y % 2)
+                           
+        z = zCol.pop()
+
+        zz71 = count % 4
+                        
+        if zz71 == 0 or zz71 == 2:
+            mod_x = (z ^ (mod_x2 | mod_y2) ^ (mod_x2 & mod_y2)) % len(choices)
+        elif zz71 == 1:
+            mod_x = (x & y) % len(choices)
+        else:
+            mod_x = (x | y) % len(choices)
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 72:
+        # HOW_COULD_IT_ALL_FALL_ONE_DAY______________________________72_____________                      
+        if count == 0:
+            ffSpecificState = random.randint(10, 100)
+                            
+        if count % 2 == 0:
+            bg1 = x
+            bg2 = y
+                            
+            if x > bg2:
+                bg1 = y
+                bg2 = x
+
+            qz = random.randint(bg1, bg2)
+
+            zl = [x, y, qz]
+
+            zl.sort(reverse=True)
+                           
+            z3 = int(abs(math.hypot(zl[0], zl[1])) * math.pi)
+            zz = z3 | random.choice(zl)
+            z = zz - (zz % ffSpecificState)
+
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+        else:
+            z = x + y - (x % ffSpecificState) - (y % ffSpecificState) 
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 73:
+                        # SHE NEVER NOTICED
+        if count % 2 == 0:
+            mod_y = int(x * math.pi) | int(y * math.pi)
+            mod_x = int(x * math.e) | int(y * math.e)
+
+            z = mod_x & mod_y
+            z = z - (z % tippingPoint)
+        else:
+            mod_y = int(x * math.e) | int(y * math.pi)
+            mod_x = int(x * math.e) | int(y * math.pi)
+
+            z = mod_x & mod_y
+            z = z - (z % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 74:
+                        # AEROPLANE IN THE SEA WITH DARKNESS
+        x74 = x - (x%4)
+        y74 = y - (y%4)
+
+        if count % 2 == 0:
+            mod_y = int(x74 * math.pi) | int(y74 * math.pi)
+            mod_x = int(x74 * math.e) | int(y74 * math.e)
+
+            z = mod_x & mod_y
+            z = z - (z % tippingPoint)
+        else:
+            mod_y = int(x74 * math.e) | int(y74 * math.pi)
+            mod_x = int(x74 * math.e) | int(y74 * math.pi)
+
+            z = mod_x & mod_y
+            z = z - (z % tippingPoint)                  
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 75:
+                        # BIG SQUARE PUSSY
+        i75 = tippingPoint
+
+        if x % i75 == 0 or y % i75 == 0:
+            z = 0
+        else:
+            mod_y = y - (y % tippingPoint)
+            mod_x = x - (x % tippingPoint)
+
+            z = (mod_y << 4) + mod_x
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 76:
+                        # SCOOL FENCE
+        tippingPoint = 20
+
+        i76 = random.randint(0, 25)
+        skool = (i76,i76,i76)
+
+        y76 = y - (y % tippingPoint)
+        x76 = x - (x % tippingPoint)
+
+        z = random.randint(1, len(choices))
+
+        mod_y2 = abs(height - y) % tippingPoint
+        mod_x = abs(x - y) % tippingPoint
+        mod76 = tippingPoint // 2
+
+        if abs(mod_x - mod76) < 2:
+            z = 0
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, [skool], z)
+        elif abs((x % tippingPoint) - mod_y2) < 1:
+            z = 0
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, [skool], z)
+        else:
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 77:
+                        # the echo of silence reverberates off the walls of my being
+                        # but no one can hear it out there
+                        # it's sad and dark and lonely in your casket
+                        # when there are no nail marks on the inside
+                        # and two miles of dirt above
+                        # i lived on a pile of rocks
+                        # where i'll die after the final reckoning
+                        # when the life drains from your body
+                        # and the earth's, and the universe
+                        # implodes
+        if i % tippingPoint == 0:
+            switcher = 1 - switcher
+
+        if switcher == 0:                            
+            mod_x = int(abs(math.hypot(x, y)))
+            mod_x = mod_x - (mod_x % tippingPoint)                            
+        else:
+            mod_x = x + y - (x % tippingPoint) - (y % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 78:
+                        # BIG SQUARES NO TOE                       
+        mod_y = y - (y % tippingPoint)
+        mod_x = x - (x % tippingPoint)
+
+        z = (mod_y << 4) + mod_x
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 79:
+                        # ALONE ON A FRIDAY NIGHT                        
+        if variant == 1:
+            if switcher == 0 or i % tippingPoint * 5 == 0:
+                switcher = random.randint(1, 8)
+        else:
+            switcher = variant
+
+        if switcher == 1:
+            mod_x = x + y - (x % tippingPoint) - (y % tippingPoint)
+        elif switcher == 2:
+            mod_x = x + y - (x % tippingPoint) + (y % tippingPoint)
+        elif switcher == 3:
+            mod_x = x + y + (x % tippingPoint) - (y % tippingPoint)
+        elif switcher == 4:
+            mod_x = x + y + (x % tippingPoint) + (y % tippingPoint)
+        elif switcher == 5:
+            mod_x = x - y - (x % tippingPoint) - (y % tippingPoint)
+        elif switcher == 6:
+            mod_x = x - y - (x % tippingPoint) + (y % tippingPoint)
+        elif switcher == 7:
+            mod_x = x - y + (x % tippingPoint) - (y % tippingPoint)
+        else:
+            mod_x = x - y + (x % tippingPoint) + (y % tippingPoint)                 
+                                                
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+    elif randomIt == 80:
+        # SWAPPER WHOPPER
+        if mod_alg_value == 0:
+            mod_alg_value = random.uniform(3,8)
+            #addState(f'mod_alg_value: {mod_alg_value}', None)                
+
+        mod_z = x - y + (x % tippingPoint) + (y % tippingPoint)
+
+        mod_y0 = y - (y % tippingPoint)
+
+        mod_x2 = x if y != 0 else width - x
+
+        mod_tp = tippingPoint if variant == 1 else variant
+
+        if variant == 1:
+            if count % 2 == 0:
+                mod_x = int(mod_x2 * mod_alg_value) | int(y * mod_alg_value)
+                mod_y = int(mod_x2 // mod_alg_value) | int(y // mod_alg_value)
+            else:
+                mod_x = int(mod_x2 * mod_alg_value) & int(y * mod_alg_value)
+                mod_y = int(mod_x2 // mod_alg_value) & int(y // mod_alg_value)
+
+            z = mod_x | mod_y | tippingPoint
+            z = z - (z % tippingPoint)
+        elif variant == 2:
+            mod_x = int(mod_x2 * mod_alg_value) | int(y * mod_alg_value)
+            mod_y = int(mod_x2 // mod_alg_value) | int(y // mod_alg_value)
+                            
+            z = mod_x | mod_y | tippingPoint
+            z = z - (z % tippingPoint)
+        elif variant == 3:
+            mod_x = int(mod_x2 * mod_alg_value) & int(y * mod_alg_value)
+            mod_y = int(mod_x2 // mod_alg_value) & int(y // mod_alg_value)
+                            
+            z = mod_x | mod_y | tippingPoint
+            z = z - (z % tippingPoint)
+        elif variant == 4:
+            mod_x = int(mod_x2 * mod_alg_value) ^ int(y * mod_alg_value)
+            mod_y = int(mod_x2 // mod_alg_value) ^ int(y // mod_alg_value)
+                            
+            z = mod_x | mod_y | tippingPoint
+            z = z - (z % tippingPoint)
+        elif variant == 14:
+            mod_x = int(mod_x2 * mod_alg_value) ^ int(y * mod_alg_value)
+            mod_y = int(mod_x2 // mod_alg_value) ^ int(y // mod_alg_value)
+                            
+            z = mod_x & mod_y & tippingPoint
+            z = z - (z % tippingPoint)
+        else:
+            zz = (variant % 10)
+            zz = zz if zz != 0 else tippingPoint
+
+            if count % zz == 0:
+                mod_x = int(mod_x2 * mod_alg_value) | int(y * mod_alg_value)
+                mod_y = int(mod_x2 // mod_alg_value) | int(y // mod_alg_value)
+            else:
+                mod_x = int(mod_x2 * mod_alg_value) & int(y * mod_alg_value)
+                mod_y = int(mod_x2 // mod_alg_value) & int(y // mod_alg_value)
+
+            z = mod_x | mod_y | tippingPoint
+            z = z - (z % tippingPoint)                        
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 81:
+        # DIGITAL OPULENCE
+        if count == 0:
+            ffSpecificState = random.randint(2, 8)
+            ffSpecificState2 = random.randint(4, 12)
+
+        mod_x = x - (x % ffSpecificState)
+        mod_y = y - (y % ffSpecificState2)
+                        
+        z = (mod_x << 16) | mod_y
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 82:
+        # THAT PROBABLY LOOKS INSANE
+        if count == 0:
+            switcher = random.choice([1, -1])
+
+        mod_x = int(x * math.pi) | int(x * math.pi)
+        mod_y = int(y * math.e) | int(y * math.e)
+
+        z = mod_x | mod_y
+        #z = z - (z % tippingPoint)
+
+        (mod_q, mod_r) = get_grid_vals(x, y, tippingPoint)
+        mod_s = mod_q + (mod_r * switcher)
+                        
+        i82 = y % tippingPoint
+        i82_2 = x % tippingPoint
+
+        i82_3 = (tippingPoint // 2)                        
+
+        if (i82 <= i82_3 and i82_2 < i82_3) or ((i82 > (i82_3 + 1)) and (i82_2 >= (i82_3 + 1))):
+            z = mod_s
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 83:
+        # lastColorsKept = colorsKept
+
+        if count == 0:
+            zchoices = [random.randint(2, 50) for i in range(6)]
+            z3choices = [2 ** random.randint(1, 8) for i in range(5)]
+                            
+            ffSpecificState = random.choice(zchoices)
+            ffSpecificState2 = ffSpecificState
+
+            while ffSpecificState2 == ffSpecificState:
+                ffSpecificState2 = random.choice(zchoices)                              
+                        
+        if count % 5 == 0 or x % 15 == 0 or y % 15 == 0:
+            mod_x = math.sqrt(random.choice([ffSpecificState, ffSpecificState2]))
+                                
+            if mod_x == 0:
+                mod_x = 1
+
+            zAs = [int(x * mod_x),int(y * mod_x),int(x // mod_x),int(y // mod_x)]
+                            
+            zA = random.choice(zAs)
+            zB = random.choice(zAs)
+
+            z = (zA ^ zB) | ((x | y) << 4)
+                            
+            ffSpecificState3 = z % len(choices)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, ffSpecificState3)
+    elif randomIt == 84:
+        mod_y = y - (y % tippingPoint)
+        mod_x = x - (x % tippingPoint)
+
+        z = (mod_y << 4) + mod_x                        
+                                       
+        # | 0 | 1 |
+        # |---+---|
+        # | 2 | 3 |
+        
+        mod_84 = 25 if variant == 1 else variant
+
+        mod_ff_x = int(x / mod_84)
+        mod_ff_x = mod_ff_x % 3
+                        
+        mod_ff_y = int(y / mod_84)
+        mod_ff_y = mod_ff_y % 3
+                        
+        mod_z = int(abs(math.hypot(x, y)))
+        mod_z = mod_z - (mod_z % tippingPoint)                            
+                                                
+        mod_q = x + y - (x % tippingPoint) - (y % tippingPoint)
+                        
+        if mod_ff_x == 0:
+            if mod_ff_y == 0:                            
+                mod_84 = z
+            elif mod_ff_y == 1:
+                mod_84 = mod_z
+            else:
+                mod_84 = x ^ y
+        elif mod_ff_x == 1:
+            if mod_ff_y == 0:
+                mod_84 = mod_q
+            elif mod_ff_y == 1:
+                mod_84 = x & y
+            else:
+                mod_84 = x | y
+        else:
+            if mod_ff_y == 0:
+                mod_84 = mod_q - mod_z
+            elif mod_ff_y == 1:
+                mod_84 = mod_q & mod_z
+            else:
+                mod_84 = mod_q | mod_z
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_84)
+    elif randomIt == 85:
+        if count == 0:
+            ffSpecificState = random.randint(5, 15)
+            ffSpecificState2 = random.randint(4, ffSpecificState + 10)
+            ffSpecificState3 = random.randint(2, 8)
+                            
+        mod_c = count % ffSpecificState3
+                        
+        mod_x = x - (x % ffSpecificState - mod_c)
+        mod_y = y - (y % ffSpecificState2 + mod_c)
+                        
+        mod_z = ( mod_x << 2 ) | mod_y
+                        
+        newcolour = get_kept_color_avoid_sides(colorsKept, choices, mod_z, limit=5)
+                        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_z)
+    elif randomIt == 86:
+        # DEMIURGE OVERKILL
+        if count == 0:
+            ffSpecificState = random.random() * 10
+
+        if count % 4 == 0:
+            mod_x = int(x * ffSpecificState) | int(y * ffSpecificState)
+            mod_y = int(x // ffSpecificState) | int(y // ffSpecificState)
+            z = mod_x | mod_y | int(ffSpecificState)
+            z = z - (z % tippingPoint)
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+        elif count % 2 == 0:
+            mod_x = int(x * ffSpecificState) & int(y * ffSpecificState)
+            mod_y = int(x // ffSpecificState) & int(y // ffSpecificState)
+            z = mod_x | mod_y | int(ffSpecificState)
+            z = z - (z % tippingPoint)
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+        else:
+            if ffSpecificState2 == 0:
+                z = y
+                zz = x
+                ffSpecificState2 = 1
+            else:
+                z = x
+                zz = y
+                ffSpecificState2 = 0
+                                
+            mod_x = z - (z % tippingPoint)
+            mod_y = zz - (zz % tippingPoint)
+
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
+            (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_y)
+    elif randomIt == 87:
+        # idk yet
+        if ffSpecificState == 0:
+            ffSpecificState = random.uniform(3,8)   
+
+        mod_y = y - (y % tippingPoint)
+        mod_x = x - (x % tippingPoint)
+
+        z = ((mod_y << 2) + (mod_x << 4)) | random.randint(0,8)
+
+                        # mod_z = x - y + (x % tippingPoint) + (y % tippingPoint)
+                        # mod_x2 = x if y != 0 else width - x
+                        # mod_tp = tippingPoint if variant == 1 else variant
+
+                        # if count % 2 == 0:
+                        #     mod_x = int(mod_x2 * ffSpecificState) | int(y * ffSpecificState)
+                        #     mod_y = int(mod_x2 // ffSpecificState) | int(y // ffSpecificState)
+                        # else:
+                        #     mod_x = int(mod_x2 * ffSpecificState) & int(y * ffSpecificState)
+                        #     mod_y = int(mod_x2 // ffSpecificState) & int(y // ffSpecificState)
+                        
+                        # z = mod_x | mod_y | tippingPoint
+                        # z = z - (z % tippingPoint)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+    elif randomIt == 88:
+        if count % 2 == 0:
+            z = abs(x - y)
+        else:
+            z = abs(y - x)
+
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
+
+    return newcolour, choices, x, y, switcher
+
+@njit
+def isItTimeToDump(dumpEvery, iPoint):
+    return dumpEvery > 0 and (iPoint > 0) and (iPoint % dumpEvery == 0 or iPoint % dumpEvery == 1)
 
 def getTippingPoint(randomIt):
     if randomIt == 7:
@@ -3395,7 +3776,48 @@ def _color_target_check(color1, color2, threshold=25):
         return True
     return False
 
-def targetCheck(pnt, targ, compFunc=0):
+def targetCheck(pixdata, x, y, targ, compFunc=0):
+    chk = False
+
+    try:
+        colorDiff = 15
+
+        if compFunc == -1:
+            return True
+
+        # TODO: remove, used passed in only
+        cf = getParam(2)
+
+        if cf != "" and cf != 0:
+            colorDiff = cf
+
+        if callable(compFunc):
+            chk = compFunc(pixdata[x,y], targ)
+            return chk
+        elif compFunc == 1:
+            colorDiff = 15
+        elif compFunc == 2:
+            colorDiff = 2
+        elif compFunc == 3:
+            colorDiff = 25
+        elif compFunc > 3:
+            colorDiff = compFunc        
+
+        if compFunc == 0:
+            if targ == pixdata[x,y]:
+                chk = True        
+        elif compFunc >= 1:
+            chk, diff, iTarg = checkPointTargDiff(pixdata[x,y], targ, colorDiff)
+
+            #doTimeCheck(f"compFunc: {compFunc} colorDiff: {colorDiff} // pnt: {pnt} targ: {targ} // chk: {chk} diff: {diff} iTarg: {iTarg} ")
+                            
+        return chk
+        
+    except Exception as e:        
+        logException(e)
+        return False
+
+def targetCheck0(pnt, targ, compFunc=0):
     chk = False
 
     try:
@@ -3418,8 +3840,10 @@ def targetCheck(pnt, targ, compFunc=0):
             colorDiff = 25
         elif compFunc > 3:
             colorDiff = compFunc        
-            
-        if compFunc == 0:
+
+        if compFunc == -1:
+            chk = True
+        elif compFunc == 0:
             if targ == pnt:
                 chk = True
         elif compFunc >= 1:
@@ -3444,6 +3868,7 @@ def targetCheck(pnt, targ, compFunc=0):
         
         return False
 
+@njit
 def checkPointTargDiff(pnt, targ, colorDiff):
     """diff: will contain differences of rgba values """
     diff = [0] * len(targ)
@@ -3463,6 +3888,9 @@ def checkPointTargDiff(pnt, targ, colorDiff):
     return chk, diff, iTarg
 
 def getPaletteFromImage(sourceimg, distance=25, limit=5):
+    return getPaletteFromImageFull(sourceimg, distance, limit)[0]
+
+def getPaletteFromImageFull(sourceimg, distance=25, limit=5):
     img = sourceimg.copy()
     img = img.convert("RGB")
     pixdata = img.load()
@@ -3493,7 +3921,7 @@ def getPaletteFromImage(sourceimg, distance=25, limit=5):
         if len(choices) >= limit:
             break
 
-    return choices
+    return (choices, sc)
 
 def getPalette(choiceStatic=""):
     palette = getInsertWalk(palettesPath, choiceStatic=choiceStatic)
@@ -3515,12 +3943,12 @@ def getPalette(choiceStatic=""):
 
 def getStamp(choiceStatic=""):
     doTimeCheck("getStamp starts")
+    random.seed()
     stamp = getInsertWalk(stampPath, choiceStatic=choiceStatic)
     doTimeCheck("stamp gotten")
+
     img = Image.open(stamp)
-
     img = img.convert("RGBA")
-
     img = resizeToMinMax(img, maxW=75, maxH=75, minW=50, minH=50)
 
     return img
@@ -3705,8 +4133,7 @@ def getInsert(choiceStatic="", pathOfInserts=""):
        
     insertPath = pathOfInserts + chosen
     
-    return insertPath
-        
+    return insertPath        
  
 def getFont(choiceStatic=""):
     pathFonts = fontPath
@@ -3977,7 +4404,13 @@ def saveToWrapper(key, path):
     global currentUID
     uid = currentUID
 
-    wrapperData[key][uid].append(path)
+    # TODO: fix
+
+    try:
+        wrapperData[key][uid].append(path)
+    except:
+        pass
+
     return    
 
 def saveForXanny(img):
@@ -4005,10 +4438,71 @@ def addState(statement, params={}, self=None):
 
 # TDL functions ---------------------------------------- @~-------
 
+def flagship(fontSize=128):   
+    try:        
+        choices = getInputPalette()
+
+        fImg = getOneSafeFunc()
+        img = fImg()
+
+        width = img.size[0]
+        height = img.size[1]
+        
+        draw = ImageDraw.Draw(img)
+        pixdata = img.load()
+        
+        fontPath = getFont()
+
+        maxX = 0
+        xTra = 10
+        spacing = 25                
+        
+        x = spacing
+        y = 12
+
+        word = getTDL()
+
+        text_size_x = img.size[0] + 100
+        text_size_y = img.size[1] + 50
+        
+        c = pixdata[x,y]        
+        
+        #stampTrans = None
+
+        # floodfill(img, (x, y), targetcolour = c,
+        #           newcolour = (0,0,0),
+        #           randomIt=iAlg,
+        #           choices=choices,
+        #           compFunc=-1
+        #           #stamp=stamp
+        #           #stampTrans=stampTrans
+        #           )
+
+        while text_size_x > img.size[0] - x - 10 or text_size_y > img.size[1] - y - 10:
+            fontSize -= 1
+            
+            fon = ImageFont.truetype(fontPath, fontSize)
+
+            text_size_x, text_size_y = draw.multiline_textsize(word, font=fon, spacing=spacing)
+
+        fillColor = random.choice(choices)
+
+        x = getTextPosFromImgAndTextSize(img.size[0], text_size_x)
+        y = getTextPosFromImgAndTextSize(img.size[1], text_size_y)
+        
+        strokec = getInverse(fillColor)
+        textStrokeExtraMultiline(draw, x, y, word, fon, strokec, spacing, "center", 3)
+        draw.multiline_text((x, y), word, font=fon, fill=fillColor, spacing=spacing, align="center")
+                
+    except Exception as e:
+        img = writeImageException(e)  
+        
+    return img
+
 def dots():
     try:
-        width = getCurrentStandardWidth() // 2
-        height = getCurrentStandardHeight() // 2
+        width = getCurrentStandardWidth()
+        height = getCurrentStandardHeight()
 
         img = Image.new("RGBA", (width, height), "#000000")
         draw = ImageDraw.Draw(img)
@@ -4112,9 +4606,7 @@ def dotsDos():
         pixdata = img.load()
         targColr = pixdata[width // 2, height // 2]
         
-        global maxFloodFillArg
-
-        iAlg = random.randint(1, maxFloodFillArg)
+        iAlg = getRandomFloodFill()
 
         floodfill(img, (width // 2, height // 2), targetcolour = targColr,
                 newcolour = (0,0,0),
@@ -4567,8 +5059,8 @@ def fuckinthatdata(imgInputPath=""):
         p1 = getParam(0)
         iterations = 9 # int(p1) if p1.isdecimal() else 9
 
-        megaWidth = width * 3 # width*(iterations//3)
-        megaHeight = height * 3 # *(iterations//3)
+        megaWidth = width * 3
+        megaHeight = height * 3
         finalImage = Image.new("RGBA", (megaWidth, megaHeight), "#ffffff")
 
         pixdata = wts.load()
@@ -4907,87 +5399,95 @@ def grittyer():
     
     return img
 
-def bored():
-    width = 600
-    height = 600
-    
-    img = Image.new("RGB", (width,height), "#ffffff")
-    draw = ImageDraw.Draw(img)
-
-    pixdata = img.load()
-
-    draw.polygon([(0,0), (100,100), (0, 100)], outline=(0,0,0))
-
-    floodfill(img, (30, 50),
-              targetcolour=(255,255,255),
-              newcolour=(255,0,0),
-              randomIt = 1)
-
-    draw.polygon([(0,0),
-                  (400,400),
-                  (400,0)],
-                 outline=(0,0,0),
-                 fill=(255,255,255))
-
-    floodfill(img, (350, 30),
-              targetcolour = (255,255,255),
-              newcolour=(255,255,0),
-              randomIt = 2)
-
-    draw.polygon([(0,200),
-                  (150,500),
-                  (200,400),
-                  (50,150)],
-                  outline = (255,255,0),
-                  fill = (255, 255, 255))
-
-    floodfill(img, (5, 200), targetcolour = (255,255,255),
-              newcolour = (0,0,0),
-              randomIt = 3)
-
-    floodfill(img, (5, 400),
-              targetcolour = (255,255,255),
-              newcolour = (255,255,0),
-              randomIt = 4)
-    
-##    for y in xrange(img.size[1]):
-##        for x in xrange(img.size[0]):
-##
-##            if stripe >= random.randint(5, 22):
-##                r = random.randint(0, 5)
-##                g = random.randint(0, 255-r)
-##                b = random.randint(0, 255-r-g)
-##                a = 255
-##                currentColor = (r, g, b, a)
-##                stripe = 0
-##                
-##            pixdata[x,y] = currentColor
-##            i += 1
-##            stripe += 1
-
-    imgInputPath = getInsertById(getParam(4))
-
-    wts = Image.open(imgInputPath)
-    wts.load()
-    wts = wts.convert("RGBA")
-
-    pixdata = wts.load()
+def bored(): # you wouldn't last an hour in the asylum where they raised me
+    try:
+        width = getCurrentStandardWidth() // 2
+        height = getCurrentStandardHeight() // 2
+        choices = getInputPalette()
         
-    for y in range(wts.size[1]):
-        for x in range(wts.size[0]):
-            if x > 390 or x < 200:
-                pixdata[x,y] = (255,255,255,0)
-                
-            if abs(pixdata[x,y][0] - pixdata[x,y][1]) < 20:
-                if x < 245 or x > 350 or y > 300:
+        img = Image.new("RGB", (width,height), "#ffffff")
+        draw = ImageDraw.Draw(img)
+        pixdata = img.load()
+
+        rnd1 = width // 2
+
+        cStroke = random.choice(choices)
+
+        draw.polygon([(0,0), (rnd1,rnd1), (0, rnd1)], outline=cStroke)
+
+        floodfill(img, (30, 50),
+                targetcolour=(255,255,255),
+                newcolour=(255,0,0),
+                randomIt = 1)
+
+        draw.polygon([(0,0),
+                    (400,400),
+                    (400,0)],
+                    outline=cStroke,
+                    fill=(255,255,255))
+
+        floodfill(img, (350, 30),
+                targetcolour = (255,255,255),
+                newcolour=(255,255,0),
+                randomIt = 2)
+
+        draw.polygon([(0,200),
+                    (150,500),
+                    (200,400),
+                    (50,150)],
+                    outline = (255,255,0),
+                    fill = (255, 255, 255))
+
+        floodfill(img, (5, 200), targetcolour = (255,255,255),
+                newcolour = cStroke,
+                randomIt = 3)
+
+        floodfill(img, (5, 400),
+                targetcolour = (255,255,255),
+                newcolour = (255,255,0),
+                randomIt = 4)
+        
+    ##    for y in xrange(img.size[1]):
+    ##        for x in xrange(img.size[0]):
+    ##
+    ##            if stripe >= random.randint(5, 22):
+    ##                r = random.randint(0, 5)
+    ##                g = random.randint(0, 255-r)
+    ##                b = random.randint(0, 255-r-g)
+    ##                a = 255
+    ##                currentColor = (r, g, b, a)
+    ##                stripe = 0
+    ##                
+    ##            pixdata[x,y] = currentColor
+    ##            i += 1
+    ##            stripe += 1
+
+        imgInputPath = getInsertById(getParam(4))
+
+        wts = Image.open(imgInputPath)
+        wts.load()
+        wts = wts.convert("RGBA")
+
+        pixdata = wts.load()
+            
+        for y in range(wts.size[1]):
+            for x in range(wts.size[0]):
+                if x > 390 or x < 200:
                     pixdata[x,y] = (255,255,255,0)
+                    
+                if abs(pixdata[x,y][0] - pixdata[x,y][1]) < 20:
+                    if x < 245 or x > 350 or y > 300:
+                        pixdata[x,y] = (255,255,255,0)
 
-    draw2 = ImageDraw.Draw(wts)
+        draw2 = ImageDraw.Draw(wts)
+        
+        height = wts.size[1]
+        width = wts.size[0]
+
+        img.paste(wts, (-125, 140), wts)
     
-    height = wts.size[1]
-    width = wts.size[0]
-
-    img.paste(wts, (-125, 140), wts)
+    except Exception as e:
+        img = writeImageException(e)    
     
     return img
 
@@ -5749,8 +6249,60 @@ def stampSample():
                           targetcolour = (255, 255, 255),
                           newcolour = (0,0,0),
                           randomIt = 0,
+                          compFunc=-1,
                           stamp = stmp1)
         
+    except Exception as e:
+        img = writeImageException(e)
+
+    return img
+
+def paletteSample():
+    try:
+        global palettelist
+
+        rowCount = 0
+        for p in palettelist:
+            rowCount += 1
+            pass
+        
+        recSize = 40
+            
+        height = rowCount * recSize * 2
+        width = getCurrentStandardWidth()
+
+        fon = ImageFont.truetype(fontPath + fontNameMono, 18)
+    
+        img = Image.new("RGBA", (width,height), "#ffffff")
+        draw = ImageDraw.Draw(img)
+        pixdata = img.load()      
+
+        cOutline = (0,0,0,255)
+        
+        spacer = 5
+
+        y = 0
+        for i in palettelist:
+            choices = getPaletteSpecific(i[0])
+
+            x = 25
+            kz = ((width - x) / len(choices) - 3)
+            boxWidth = int(kz if len(choices) > 10 else 50)
+
+            label = f'{i[1]}'
+            draw.text((x, y), label, font=fon, fill=cOutline)
+            text_size_x, text_size_y = draw.textsize(label, font=fon)            
+
+            y += spacer + text_size_y
+            boxHeight = recSize - spacer - text_size_y
+
+            for c in choices:
+                # rootLogger.debug(f'i: {i} c: {c}')
+                draw.rectangle(((x,y),(x+boxWidth,y+boxHeight)), fill=c, outline=cOutline)
+                x += boxWidth
+
+            y += recSize
+            
     except Exception as e:
         img = writeImageException(e)
 
@@ -5812,6 +6364,7 @@ def stampFull():
                           targetcolour = (255, 255, 255),
                           newcolour = (0,0,0),
                           randomIt = 0,
+                          compFunc=-1,
                           stamp = stmp1)
         
     except Exception as e:
@@ -8754,47 +9307,6 @@ def coco2_18_palette():
         
     return img
 
-def colorSample():   
-    palette = getPaletteGenerated()
-
-    rowCount = 10
-    recSize = 50
-        
-    height = recSize * rowCount + 1
-    cutoff = len(palette) // rowCount
-    
-    if cutoff < 5:
-        cutoff = 5
-        
-    width = recSize * cutoff + 1
-
-    try:
-        img = Image.new("RGBA", (width,height), "#ffffff")
-        draw = ImageDraw.Draw(img)
-        pixdata = img.load()
-
-        y = 0
-        j = 0
-        
-        for i in range(0, len(palette)):         
-            c = palette[i] # ac            
-            #c = hex_to_rgb(ac)
-
-            x = recSize * j
-            
-            draw.rectangle(((x,y),(x+recSize,y+recSize)), fill=c, outline=palette[0])
-
-            if j == cutoff:
-                y += recSize
-                j = 0                
-            else:
-                j += 1
-            
-    except Exception as e:
-        img = writeImageException(e)
-
-    return img
-
 def insert_18(imgpath=""):
     startTime = time.time()
 
@@ -9398,16 +9910,17 @@ def radioFill_blend(imgpath=""):
     try:
         global input_palette
 
-        if imgpath != "":
-            img = Image.open(imgpath)
-            choices = getPaletteFromImage(img)
-            imgs = radioFill_process(imgpath=imgpath,
-                                     choices=choices)
+        if len(input_palette) > 0:
+            choices = input_palette
         else:
-            if len(input_palette) > 0:
-                imgs = radioFill_process(imgpath=imgpath, choices=input_palette)
-            else:
-                imgs = radioFill_process(imgpath=imgpath)
+            choices = []
+
+        if imgpath != "" and len(choices) <= 0:
+            choices = getPaletteFromImage(img)
+
+        imgs = radioFill_process(imgpath=imgpath,
+                                 choices=choices,
+                                 floodLimit=-4)
         
         img = imgs[0]
         origImg = imgs[1]
@@ -10574,8 +11087,8 @@ def vhsTextGrid():
     return img
 
 def picGrid(walkPath="", doAdapt=False):
-    """p1: pic count<br />
-    p2: grid size"""
+    """p1: row/col count (default=5)<br />
+    p2: square size (px) (default=250)"""
 
     picCount = 5
     gridSize = 250
@@ -11032,27 +11545,6 @@ def wordGrid():
         
     return img
 
-def getParam(i):
-    global extParams
-   
-    result = ""
-    
-    if extParams != []:
-        if i >= 0 and len(extParams) >= (i+1) and extParams[i] != "":
-            result = extParams[i]
-        elif i < 0 and extParams[i] != "":
-            result = extParams[i]
-        
-    return result
-
-def getDecimalParams(defaultP1=250, defaultP2=100):
-    p1 = getParam(0)
-    p2 = getParam(1)
-    p1 = int(p1) if p1.isdecimal() else defaultP1
-    p2 = int(p2) if p2.isdecimal() else defaultP2
-
-    return (p1, p2)
-
 def getGridWord(iAlg, wordAlg, c="", attempts=250):
     output = ""
 
@@ -11120,7 +11612,7 @@ def getGridWord(iAlg, wordAlg, c="", attempts=250):
 
     return output
 
-def wordGrid2(wordline="", fontSize=36, fontPath=""):
+def wordGrid2(wordline="", fontSize=34, fontPath=""):
     """p1: first word must match first char of p1<br />
     p2: second word must match first char of p2<br />
     paramfont: partial match of font filename"""
@@ -11135,21 +11627,23 @@ def wordGrid2(wordline="", fontSize=36, fontPath=""):
     if fontPath == "":
         fontPath = getFont()
         
-    width = 1300
-    height = 950
+    width = 1280
+    height = 1024
     
     p1 = getParam(0)
     p2 = getParam(1)    
     
     try:
+        bgColor = hex_to_rgb("#000000")
+
         global input_palette
 
         if input_palette != "" and input_palette != []:
             choices = input_palette
         else:         
-            choices = getPaletteGenerated()
+            choices = getPaletteGenerated(bgColor=bgColor, minContrast=2.75)        
 
-        img = Image.new("RGBA", (width, height), "#000000")
+        img = Image.new("RGBA", (width, height), bgColor)
         draw = ImageDraw.Draw(img)
                
         maxX = 0
@@ -11183,8 +11677,13 @@ def wordGrid2(wordline="", fontSize=36, fontPath=""):
                     fillColor = random.choice(choices)
                     iChoice += 1
 
-                if x + text_size_x < img.size[0]: 
-                    draw.text((x, y), word, font=fon, fill=fillColor)
+                # ccr = calcContrastRatio(bgColor, fillColor)
+
+                strokec = getInverse(fillColor)
+                strokec = (strokec[0], strokec[1], strokec[2], 64)
+
+                if x + text_size_x < img.size[0]:                    
+                    draw.text((x, y), f"{word}", font=fon, fill=fillColor, stroke_width=1, stroke_fill=strokec)
 
                 lastChoice = fillColor
         
@@ -11228,6 +11727,123 @@ def getDecree(p1, p2, attempts=50):
         word = (w1 + " " + conjuc + " " + w2)
 
     return word
+
+def textHash(wordline="", fontSize=36, fontPath=""):
+    global rootLogger
+    global fontPathSansSerif
+
+    paramfont = getParam(3)
+
+    if paramfont != "":
+        fontPath = getFont(choiceStatic=paramfont)
+    if fontPath == "":
+        fontPath = getFont()
+        
+    width = getCurrentStandardWidth()
+    height = getCurrentStandardHeight()
+    
+    p1 = getParam(0)
+    p2 = getParam(1)
+    
+    outputs = []
+
+    try:
+        global input_palette
+
+        if input_palette != "" and input_palette != []:
+            choices = input_palette
+        else:         
+            choices = getPaletteGenerated()
+        
+        things = [time.time(), "ABC", "123", 255, 128, 0]
+
+        for y in things:
+            v2 = hashlib.sha256(str(y).encode('utf-8')).hexdigest()
+            line = [y, hash(y), v2]
+            
+            outputs.append(line)
+        
+        #fontName = fontPath.split("/")[-1]
+        #fonSans = ImageFont.truetype(fontPathSansSerif, 16)
+        #text_size_x, text_size_y = draw.textsize(fontName, font=fonSans)
+        #draw.text((img.size[0] - text_size_x - 5, img.size[1] - text_size_y - 5), fontName, font=fonSans, fill=(255,255,255))
+
+    except Exception as e:
+        rootLogger.error(e)
+        img = writeImageException(e)  
+        
+    outputText = "<div class='output-text single-file' id='output-text'>"
+    outputText += f'<table class="palette">'
+    outputText += f'<tr><th>Value</th><th>hash()</th><th>SHA256</th></tr>'
+
+    for o in outputs:
+        xx = ''.join(f'<td>{h}</td>' for h in o)
+        outputText += f'<tr>{xx}</tr>'
+
+    outputText += "</table></div>"
+
+    return outputText
+
+def colorSample():
+    """p1: comma-separated list of hex codes without #<br />
+    p2: length of palette to generate if p1 not supplied (default=5)"""
+
+    palette = []
+
+    p1 = getParam(0)
+    p2 = getParam(1)
+
+    p2 = int(p2) if p2 != "" and p2.isdecimal() else 5
+
+    if p1 != "" and "," in p1:
+        hexc = [z.strip() for z in p1.split(',')]
+    
+        for c in hexc:
+            palette.append(hex_to_rgb("#"+c))
+    else:
+        palette = getPaletteGenerated(paletteLength=p2)
+
+    rootLogger.debug(f'p1: {p1}, p2: {p2}, palette: {palette}')
+
+    rowCount = 10
+    recSize = 100
+        
+    height = recSize * rowCount + 1
+    cutoff = len(palette) // rowCount
+    
+    if cutoff < 5:
+        cutoff = 5
+        
+    width = recSize * cutoff + 1
+
+    try:
+        img = Image.new("RGBA", (width,height), "#ffffff")
+        draw = ImageDraw.Draw(img)
+        pixdata = img.load()
+
+        y = 0
+        j = 0
+        
+        for i in range(0, len(palette)):         
+            c = palette[i]
+            x = recSize * j
+            
+            draw.rectangle(((x,y),(x+recSize,y+recSize)), fill=c, outline=palette[0])
+
+            if j == cutoff:
+                y += recSize
+                j = 0                
+            else:
+                j += 1
+        
+        y += recSize + 1
+
+        img = img.crop((0, 0, width, y))
+
+    except Exception as e:
+        img = writeImageException(e)
+
+    return img
 
 def wordGridTxT(wordline="", fontSize=36, fontPath=""):
     """p1: first word must match first char of p1<br />
@@ -11295,8 +11911,6 @@ def generate_stats(name, stats={
         'WIS': 5,
         'CHR': 5
     }):
-
-    import hashlib
 
     X = 3
 
@@ -12714,12 +13328,21 @@ palettelist = [
     (17, "17 (YOUR FRIEND'S CHAMBER)"),
     (18, "18 (THE BRANE OF EQUINOX)"),
     (19, "19 (pastels)"),
-    (20, "20 (rainbow)"),    
+    (20, "20 (rainbow)"),
     (21, "21 (hsv)"),
     (22, "22 (light text)"),
     (23, "23 (ALL CGA)"),
     (24, "24 (CGA++)"),
+    (25, "25 (CHASM)"), # courtesy of: https://lospec.com/palette-list/chasm
     (26, "26 (defective)"),
+    (27, "27 (8-BIT HVC)"),
+    (28, "28 (LIMEDEATH)"),
+    (29, "29 (CYANDEATH)"),
+    (30, "30 (DEATHDEATH)"),
+    (31, "31 (OUTRUN)"),
+    (32, "32 (sunset)"),
+    (33, "33 (cappuchino)"),
+    (34, "34 (solemn bob)"),
     (47, "47 (metatronWorld)"),
     (98, "98 (palette from dir)"),
     (99, "99 (GEN|ERA|TED)")
@@ -12735,6 +13358,8 @@ def getPaletteSpecific(palette):
             palette = 0
 
     choices = []
+
+    random.seed()
     
     if palette == 1:
         # V_A_P_O_R_W_A_V_E______________________ONE
@@ -12864,11 +13489,59 @@ def getPaletteSpecific(palette):
 
         for c in hexc:
             choices.append(hex_to_rgb(c))
+    elif palette == 25:
+        hexc = ["#85daeb","#5fc9e7","#5fa1e7","#5f6ee7","#4c60aa","#444774","#32313b","#463c5e","#5d4776","#855395","#ab58a8","#ca60ae","#f3a787","#f5daa7","#8dd894","#5dc190","#4ab9a3","#4593a5","#5efdf7","#ff5dcc","#fdfe89","#ffffff"]
+
+        for c in hexc:
+            choices.append(hex_to_rgb(c))    
     elif palette == 26:
         hexc = ["#FF0000", "#00FF00", "#FFFF00", "#0000FF"]
 
         for c in hexc:
             choices.append(hex_to_rgb(c))
+    elif palette == 27:
+        hexc = ["#000000","#fcfcfc","#f8f8f8","#bcbcbc","#7c7c7c","#a4e4fc","#3cbcfc","#0078f8","#0000fc","#b8b8f8","#6888fc","#0058f8","#0000bc","#d8b8f8","#9878f8","#6844fc","#4428bc","#f8b8f8","#f878f8","#d800cc","#940084","#f8a4c0","#f85898","#e40058","#a80020","#f0d0b0","f87858","#f83800","#a81000","#fce0a8","#fca044","#e45c10","#881400","#f8d878","#f8b800","#ac7c00","#503000","#d8f878","#b8f818","#00b800","#007800","#b8f8b8","#58d854","#00a800","#006800","#b8f8d8","#58f898","#00a844","#005800","#00fcfc","#00e8d8","#008888","#000458","#f8d8f8","#787878"]
+
+        for c in hexc:
+            choices.append(hex_to_rgb(c))
+    elif palette == 28:
+        choices.append((0,0,0))
+
+        for ipfreely in range(4, 255, 4):
+            choices.append((0, ipfreely, 0))
+    elif palette == 29:
+        choices.append((0,0,0))
+
+        for ipfreely in range(4, 255, 4):
+            choices.append((0, 0, ipfreely))
+    elif palette == 30:
+        choices.append((0,0,0))
+
+        for ipfreely in range(4, 255, 16):
+            z = random.randint(0,2)
+            c = (0, 0, 0)
+            c = replace_at_index(c, z, ipfreely)
+            choices.append(c)
+    elif palette == 31:
+        hexc = ["#FF6C11","#FF3864","#2DE236","#261447","#0D0221","#023788","#650D89","#920075","#F6019D","#D40078","#241743","#2E2157","#FD3777","#F706CF","#FD1D53","#F9C80E","#FF4365","#540D6E","#791E94","#541388"]
+
+        for c in hexc:
+            choices.append(hex_to_rgb(c))
+    elif palette == 32:
+        hexc = ["#ffd319", "#ff901f", "#ff2975", "#f222ff", "#8c1eff"]
+
+        for c in hexc:
+            choices.append(hex_to_rgb(c))
+    elif palette == 33:
+        hexc = ["#4b3832","#854442","#fff4e6","#3c2f2f","#be9b7b"]
+
+        for c in hexc:
+            choices.append(hex_to_rgb(c))
+    elif palette == 34:
+        hexc = ["#338833","#1da27c","#30105a","#fbe82d","#510e0e","#632812","#0c4540"]
+        
+        for c in hexc:
+            choices.append(hex_to_rgb(c))    
     elif palette == 47:
         hexc = ["#FFD700", "#c8b400", "#006400", "#3CB371"]
 
@@ -12886,7 +13559,7 @@ def getPaletteSpecific(palette):
 
     return choices
 
-def getPaletteGenerated(rgb=(0,0,0), paletteLength=5):
+def getPaletteGenerated(rgb=(0,0,0), paletteLength=5, bgColor=None, minContrast=3):
     if rgb == (0,0,0):
         rgb = (0,0,0)
 
@@ -12926,7 +13599,15 @@ def getPaletteGenerated(rgb=(0,0,0), paletteLength=5):
 
             p = (int(p[0] * 255.0), int(p[1] * 255.0), int(p[2] * 255.0))
 
-            if p not in palette:
+            skipThisOne = False
+
+            if bgColor != None and minContrast > 0:
+                ccr = calcContrastRatio(bgColor, p)
+
+                if ccr < minContrast:
+                    skipThisOne = True
+
+            if p not in palette and not skipThisOne:
                 palette.append(p)
     else:
         # use the one that was specified elsewhere
@@ -14064,6 +14745,7 @@ def rose():
         
         w = 800
         h = 800
+
         debugText = False
         interval = 0.001
         strokeWidth = random.randint(2, 12)
@@ -14074,13 +14756,11 @@ def rose():
         
         global maxFloodFillArg        
         
-        img = Image.new('RGB', (w, h), "#FFFFFF")
+        img = Image.new('RGBA', (w, h), "#ffffff")
         pixdata = img.load()
 
         x = w // 2
-        y = h // 2
-        
-        print(fillChoices)
+        y = h // 2        
 
         floodfill(img, (x,y), targetcolour = pixdata[x,y],
                               newcolour = (0,0,0),
@@ -14907,6 +15587,13 @@ def darkbits():
     return img
 
 def altWorld():
+    """p1: replacement method (<br />
+    0=random color,<br />
+    1=choices,<br />
+    2=saturation crank,<br />
+    3=after fourcolor)
+    """
+
     try:
         imgpath = getInsertById(getParam(4))        
         
@@ -14917,24 +15604,31 @@ def altWorld():
        
         pixdata = img.load()
 
-        colorsKept = {}
-
         # replace every pixel with a different color
         # and keep that color to use for the same color elsewhere in the image
         # has intentional "bug" that it only replaces the first instance of the color
         # because actually doing every pixel looks incomprehensible
         
-        method = random.randint(0, 2)
+        p1 = getParam(0)
+        p1 = int(p1) if p1.isdecimal() and int(p1) >= 0 and int(p1) <= 3 else random.randint(0, 2)
+
+        method = p1
       
-        choices = []
+        choices = getInputPalette()
 
         fixBug = 0
         
-        if method == 1:
-            choices = getPaletteGenerated()        
-        elif method == 2:
+        if method in [2,3]:
             fixBug = 1
-            
+
+        if method == 3:
+            img = fourColorWithPalette(img, choices)
+            pixdata = img.load()
+
+        addState(f"fixBug: {fixBug}, method: {method}")
+        
+        colorsKept = {}
+
         for y in range(0, img.size[1]):
             for x in range(0, img.size[0]):
                 c = pixdata[x, y]
@@ -14951,6 +15645,8 @@ def altWorld():
                         hsvc = colorsys.rgb_to_hsv(c[0] // 255.0, c[1] // 255.0, c[2] // 255.0)
                         hsvc = replace_at_index(hsvc, 1, 1)
                         crep = myhsv_to_rgb(hsvc)
+                    elif method == 3:
+                        crep = random.choice(choices)
                         
                     colorsKept[str(c)] = crep
                     pixdata[x, y] = crep
@@ -15448,28 +16144,44 @@ def localWorld():
     
     return img
 
- 
-# Cryptomeld: Unlocks encrypted memories, revealing forgotten secrets.
-# Voidweave: Tears a rift in reality, allowing passage to hidden realms.
-# Nexthex: Bends time, altering the course of events with a whisper.
-# Soulforge: Fuses consciousness with machine, blurring the boundaries.
-# Neuroshade: Cloaks thoughts, shielding them from prying algorithms.
-# Chromebane: Corrodes cybernetic implants, rendering them useless.
-# Synthblood: Infuses veins with synthetic life, granting unnatural vitality.
-# Wraithwire: Threads through firewalls, stealing forbidden data.
-# Cortexhex: Rewrites neural pathways, rewriting destiny itself.
-# Viraluxe: Spreads digital contagion, infecting networks with chaos.
-# Quantumwhisper: Speaks to quantum particles, altering probabilities.
-# Holothren: Summons holographic constructs, illusions with teeth.
-# Nanoshroud: Wraps the body in nanobots, granting ethereal form.
-# Echodark: Echoes the screams of erased memories, haunting the present.
-# Aetherpulse: Disrupts reality grids, unraveling the fabric of existence.
-
-def fullFill(w=1024,h=768,iAlg=0):
+def radial_gradient():
     img = ""
     
     try:
-        img = Image.new("RGBA", (w, h), "#FFFFFF")
+        width = getCurrentStandardWidth()
+        height = getCurrentStandardHeight()
+
+        #img = Image.new("RGBA", (width, height), "#ffffff")
+
+        img = Image.radial_gradient("P")
+
+        pixdata = img.load()
+
+        global maxFloodFillArg
+        
+        iAlg = random.randint(1, maxFloodFillArg)
+
+        c = pixdata[5, 5]
+        pl = random.randint(10, 25)
+        
+        global input_palette
+
+        if input_palette != "" and input_palette != []:
+            choices = input_palette
+        else:         
+            choices = getPaletteGenerated(paletteLength=pl)
+        
+         
+    except Exception as e:
+        img = writeImageException(e)
+
+    return img
+
+def fullFill(w=getCurrentStandardWidth(),h=getCurrentStandardHeight(),iAlg=0):
+    img = ""
+    
+    try:
+        img = Image.new("RGBA", (w, h), "#ffffff")
         pixdata = img.load()
 
         global maxFloodFillArg
@@ -15493,6 +16205,7 @@ def fullFill(w=1024,h=768,iAlg=0):
                           newcolour = (160,128,100),
                           randomIt = iAlg,
                           maxStackDepth = 0 if iAlg == 21 else 0,
+                          compFunc=-1,
                   choices = choices)
          
     except Exception as e:
@@ -15500,8 +16213,8 @@ def fullFill(w=1024,h=768,iAlg=0):
 
     return img
 
-def fullFillSpecific(iAlg=80):
-    """p1: iAlg (default=80)<br />
+def fullFillSpecific(iAlg=84):
+    """p1: iAlg (default=84)<br />
     p3: variant
     """
 
@@ -15511,7 +16224,7 @@ def fullFillSpecific(iAlg=80):
     if p1 == "":
         p1 = iAlg
     else:
-        p1 = int(p1) if p1.isdecimal() else 80
+        p1 = int(p1) if p1.isdecimal() else iAlg
     
     return fullFill(iAlg=p1)
 
@@ -15538,8 +16251,8 @@ def fullFillStamp():
     img = ""
 
     try:
-        width = 800
-        height = 600
+        width = getCurrentStandardWidth()
+        height = getCurrentStandardHeight()
         
         img = Image.new("RGB", (width,height), "#ffffff")
 
@@ -15549,6 +16262,7 @@ def fullFillStamp():
                           targetcolour = (255, 255, 255),
                           newcolour = (0,0,0),
                           randomIt = 0,
+                          compFunc=-1,
                           stamp = stmp1)
         
     except Exception as e:
@@ -16300,33 +17014,38 @@ def simplePublic():
 
     return img
 
-def idkWhyWhatever(width=getCurrentStandardWidth(), height=getCurrentStandardHeight()):
+def diagonal4Way(width=getCurrentStandardWidth(), height=getCurrentStandardHeight()):
     try:
         img = ""
         
-        img = Image.new("RGBA", (width, height), "#FFFFFF")
+        img = Image.new("RGBA", (width, height), "#ffffff")
         draw = ImageDraw.Draw(img)
         pixdata = img.load()
 
-        draw.line((0,0,width, height), fill=(0,0,0), width=5)
-        draw.line((0,height,width,0), fill=(0,0,0), width=5)
+        (gridLineWidth, p2) = getIntParams(5)
+
+        draw.line((0,0,width,height), fill=(0,0,0), width=gridLineWidth)
+        draw.line((0,height,width,0), fill=(0,0,0), width=gridLineWidth)
 
         global maxFloodFillArg
+        global randoFillList
 
         choices = getPaletteGenerated()
 
         pnt = [(width // 2, height // 4),
                (width - 1, height // 2),
                (width // 2, height - 1),
-               (1, height // 2)]
-
+               (100, height // 2)]
+        
         for p in pnt:
-            fillAlg = random.randint(0, maxFloodFillArg)
+            iAlg = random.choice(randoFillList)
 
-            floodfill(img, p, targetcolour = pixdata[p[0],p[1]],
+            x = pixdata[p[0],p[1]]
+
+            floodfill(img, p, targetcolour = x,
                     newcolour = (0,0,0),
                     choices=choices,
-                    randomIt = fillAlg)
+                    randomIt = iAlg)
 
     except Exception as e:
         img = writeImageException(e)
@@ -16441,7 +17160,7 @@ def numpyFloodfill(iAlg=5002):
 
         xHonk = x // 2
 
-        (p1, p2) = getDecimalParams()
+        (p1, p2) = getIntParams()
         
         mod_x = int(abs(math.log1p(x) + math.log1p(y)) * p1)
         mod_y = int(abs(math.log1p(xHonk) - math.log1p(y)) * p2)
@@ -16454,7 +17173,7 @@ def numpyFloodfill(iAlg=5002):
         xHonk = x // tippingPoint
         yHonk = y // tippingPoint
 
-        (p1, p2) = getDecimalParams()
+        (p1, p2) = getIntParams()
 
         return (xHonk * yHonk)
 
@@ -16519,7 +17238,7 @@ def numpyFill(mod_x, mod_y=numpyFillStandardModY, w=getCurrentStandardWidth(), h
     return img
 
 def numpyNormal():
-    def mod_x(x, y, z, count, choices):
+    def mod_x(x, y, z, count, choices, tippingPoint):
         tippingPoint = random.randint(10, 30)
         mod_y = y - (y % tippingPoint)
         mod_x = x - (x % tippingPoint)
@@ -16844,9 +17563,12 @@ def opencv_gradient():
 
     return im_pil
 
-def generateAnim(N=75, draw_func=None):
+# TODO: make a function to rotate an image 360deg, animated
+
+def generateAnim(N=150, draw_func=None):
     if draw_func is None:
-        draw_func = lambda draw, x, y: draw.ellipse((x, y, x+40, y+40), 'yellow')
+        c = getRandomColorRGB()
+        draw_func = lambda draw, x, y: draw.ellipse((x, y, x+40, y+40), c)
 
     frames = []
 
@@ -16868,13 +17590,13 @@ def generateAnim(N=75, draw_func=None):
                 format='GIF',
                 save_all=True,
                 append_images=frames[1:], # Pillow >= 3.4.0
-                delay=0.1,
+                delay=0.2,
                 loop=0)
     
     animated_gif.seek(0)
     ani = Image.open(animated_gif)
 
-    return ani   
+    return ani
 
 def wordGridWordNet(wordline="", fontSize=36, fontPath=""):
     def eg(word):
@@ -16898,7 +17620,7 @@ def wordGridWordNet(wordline="", fontSize=36, fontPath=""):
 
     return wordGridGeneral(wordline, fontSize, fontPath, eg)
 
-def helloWorldOllama():
+def ollamaHelloWorld():
     global ollamaHost
     
     import ollama
@@ -16918,68 +17640,47 @@ def helloWorldOllama():
 
     return outputText
 
-def ollamaCraft():
+def ollamaCraft(model='llama2'):
     global ollamaHost
 
     import ollama
     from ollama import Client
 
+    currentEmoji = '🌈 Rainbow + 🔥 Flame'
+
+    outputText = r""
+    outputText += "<div class='output-text-llm result-container-inner'>"
+    outputText += f"user: {currentEmoji}<br /></div>"
+
     client = Client(host=ollamaHost)
-    response = client.chat(model='llama2', messages=[
+    response = client.chat(model=model, messages=[
         {
             "role": "system",
             "content": "You are Infinite Craft\n\nwhen you are given 2 text with emoji.\n\nGive something back that makes sense with relating text with emoji\n\nfor example: \"\ud83c\udf0d Earth\" + \"\ud83d\udca7 Water\" could result in \"\ud83c\udf31 Plant\"\nor \"\ud83d\udca7 Water\" + \"\ud83d\udd25 Fire\" could result in \"\ud83d\udca8 Steam\"\nYou need to create these depending on input. The input format will be: \"emoji Text + emoji Text\"\nAnd your result should be \"emoji Text\" always.\nAnd always try to keep the emoji as Closely related to the text as possible and stay consistent.\nsome examples:\n\"\ud83c\udf2c\ufe0f Wind + \ud83c\udf31 Plant\" = \ud83c\udf3c Dandelion\n\"\ud83c\udf0d Earth + \ud83d\udca7 Water\" = \ud83c\udf31 Plant\n\"\ud83c\udf0d Earth + \ud83d\udd25 Fire\" = \ud83c\udf0b Lava\n\"\ud83c\udf0d Earth + \ud83d\udd25 Fire\" = \ud83c\udf0b Lava\n\"\ud83c\udf0b Lava + \ud83c\udf0b Lava\" = \ud83c\udf0b Volcano\n\"\ud83d\udca7 Water + \ud83c\udf2c\ufe0f Wind\" = \ud83c\udf0a Wave\n\nAnd the emoji and text can be anything, it is not limited to the example i gave, make ANYTHING and always return a response in the given format\n",
         },
         {"role": "user", "content": f'\ud83c\udf0d Earth + \ud83d\udca7 Water'},
         {"role": "assistant", "content": f'\ud83c\udf31 Plant'},
-        {
-            'role': 'user',
-            'content': '\ud83c\udf08 Rainbow \ud83d\udd25 Fire'
-        }
-
-        # "examples": [
-        #     {
-        #         "from_str": "\ud83c\udf0d Earth + \ud83d\udca7 Water",
-        #         "result_str": "\ud83c\udf31 Plant"
-        #     },
-        #     {
-        #         "from_str": "\ud83d\udca8 Wind + \ud83c\udf31 Plant",
-        #         "result_str": "\ud83c\udf3c Dandelion"
-        #     },
-        #     {
-        #         "from_str": "\ud83c\udf0d Earth + \ud83d\udd25 Fire",
-        #         "result_str": "\ud83c\udf0b Lava"
-        #     },
-        #     {
-        #         "from_str": "\ud83c\udf0b Lava + \ud83c\udf0bLava",
-        #         "result_str": "\ud83c\udf0b Volcano"
-        #     },
-        #     {
-        #         "from_str": "\ud83d\udca7 Water + \ud83d\udca8 Wind",
-        #         "result_str": "\ud83c\udf0a Wave"
-        #     },
-        #     {
-        #         "from_str": "\ud83c\udfd4\ufe0f Mountain + \u2744\ufe0f Snow",
-        #         "result_str": "\ud83c\udf28\ufe0f Avalanche"
-        #     },
-        #     {
-        #         "from_str": "\ud83c\udf1e Sun + \u2614 Rain",
-        #         "result_str": "\ud83c\udf08 Rainbow"
-        #     }
-        # ],
-        # "default_chips": [
-        #     "\ud83c\udf0d Earth",
-        #     "\ud83d\udca8 Wind",
-        #     "\ud83d\udca7 Water",
-        #     "\ud83d\udd25 Fire"
-        # ]        
-    # },
+        {"role": "user", "content": "\ud83d\udca8 Wind + \ud83c\udf31 Plant"},
+        {"role": "assistant", "content": "\ud83c\udf3c Dandelion"},
+        {"role": "user", "content": "\ud83c\udf0d Earth + \ud83d\udd25 Fire"},
+        {"role": "assistant", "content": "\ud83c\udf0b Lava"},
+        {"role": "user", "content": "\ud83c\udf0b Lava + \ud83c\udf0bLava"},
+        {"role": "assistant", "content": "\ud83c\udf0b Volcano"},
+        {"role": "user", "content": "\ud83d\udca7 Water + \ud83d\udca8 Wind"},
+        {"role": "assistant", "content": "\ud83c\udf0a Wave"},
+        {"role": "user", "content": "\ud83c\udfd4\ufe0f Mountain + \u2744\ufe0f Snow"},
+        {"role": "assistant", "content": "\ud83c\udf28\ufe0f Avalanche"},
+        {"role": "user", "content": "\ud83c\udf1e Sun + \u2614 Rain"},
+        {"role": "assistant", "content": "\ud83c\udf08 Rainbow"},
+        {"role": "user", "content": currentEmoji}
     ])
 
     # Please give me a table of 78 categories. List a column for the category name. Each of these categories is a color or group of colors of some kind. Please add a description column describing the category. Add an emoji column and pick the single emoji that is most relevant for this category.
 
-    outputText = "<div class='output-text-llm' id='output-text'>"
-    outputText += f"{response['message']['content']}"
+    msg = response['message']['content']
+
+    outputText += "<div class='output-text-llm result-container-inner' id='output-text'>"
+    outputText += msg.replace("\n","<br />")
     outputText += "</div>"
 
     return outputText
@@ -17015,12 +17716,38 @@ def llmDescribeImage():
 
     return outputText
 
-def ollamaSimple():
+def ollamaBase(p1, p2, model="mistral"):
     global ollamaHost
 
     import ollama
     from ollama import Client
 
+    outputText = ""
+
+    outputText += "<div style='margin-top:10px;margin-bottom:10px;' class='output-text-llm'>system prompt: " + p1 + "<br />"
+    outputText += "user: " + p2 + "<br /></div>"
+
+    client = Client(host=ollamaHost)
+    response = client.chat(model=model, messages=[
+        {
+            'role': 'system',
+            'content': p1
+        },
+        {
+            'role': 'user',
+            'content': p2
+        }
+    ])
+
+    msg = response['message']['content']
+
+    outputText += "<div class='output-text-llm' id='output-text'>"
+    outputText += msg.replace("\n","<br />")
+    outputText += "</div>"
+
+    return outputText
+
+def ollamaSimple():
     p1 = getParam(0)
     p2 = getParam(1)
 
@@ -17032,26 +17759,38 @@ def ollamaSimple():
     if p2 == "":
         p2 = getDecree("","")
 
-    outputText += "<div style='margin-top:10px;margin-bottom:10px;' class='output-text-llm'>system prompt: " + p1 + "<br />"
-    outputText += "user: " + p2 + "<br /></div>"
+    return ollamaBase(p1, p2)
 
-    client = Client(host=ollamaHost)
-    response = client.chat(model='llama2', messages=[
-        {
-            'role': 'system',
-            'content': p1
-        },
-        {
-            'role': 'user',
-            'content': p2
-        }
-    ])
+def ollamaBored():
+    possiblePrompts = ["Act as entertainment, giving the user a list of 5 interesting facts. If the user provides a prompt, use the prompt as the topic for the facts. Format the output as HTML.",
+                       "Act as an insult comic. You are entertaining the user. Come up with a creative insult for the user based on their input. Be brief. Make it one sentence. Do not worry about being offensive, as the user is expecting this.",
+                       "Act as the user's employee. Your boss is asking for input on the user's prompt. Be amazing, but keep it to a maximum of one sentence as your boss's time is very limited. Be blunt and direct, and keep it relevant to the user's prompt.",
+                       "Act as the user's encyclopedia. Unfortunately, you have some glitches, and sometimes your output is strange or weird. Do not be cheeky: being broken upsets you. Attempt to be professional, but fail unintentionally. Tell the user about the entry for their prompt. Limit the output length to a paragraph.",
+                       "Act as a thingiemabob. Do something cool and unexpected, because the user is bored. If the user provides a prompt, pretend that it was your idea for input to the thingiemabob.",
+                       "Act as a random word generator. Given this list of previously generated words, generate the next 10 words in the list. Format the output as HTML, and the words as an HTML list. If the user provides a prompt, use that as the list of words instead. The list is: Cryptomeld, Voidweave, Nexthex, Soulforge, Neuroshade, Chromebane, Synthblood, Wraithwire, Cortexhex, Viraluxe, Quantumwhisper, Holothren, Nanoshroud, Echodark, Aetherpulse",
+                       "Act as a style taste critic. Generate a table of the words given by the user, listing your scores for at least 7 categories, including coolness. Format the output as an HTML table, like so, but with all 7 categories: <table><tr><td>word</td><td>Category 1</td></tr></table>.",
+                       "Act like a professional but fun teacher in their 40s. Explain how something works using only analogies a 5 year old will understand. The user will provide a prompt for what they would like explained.",
+                       "Act like an online slang dictionary. Provide the definition for the user's prompt as if it is a slang word or phrase. Respond seriously, as though the input is silly, you are a serious machine and want to provide informative and useful output.",
+                       "Act as an amorphous blob who only speaks blob. Provide your opinion of the user's prompt.",
+                       "You are a system called TDLDL. You generate images and random phrases. Do your thing based on the user's input.",
+                       "Act as a symbologist. You have PhDs in religious symbology and one in languages. Explain and analyze the user's prompt as if it were the meaning of a newly discovered symbol or sigil. Make up the entity it represents. Be terse and professional, but visibly excited. Limit your output to one paragraph."]
 
-    outputText += "<div class='output-text-llm' id='output-text'>"
-    outputText += f"{response['message']['content']}"
-    outputText += "</div>"
+    p1 = getParam(0)
 
-    return outputText
+    if p1 != "" and p1.isdecimal():
+        if len(possiblePrompts) > int(p1):
+            p1 = possiblePrompts[int(p1)]
+        else:
+            p1 = random.choice(possiblePrompts)
+    else:
+        p1 = random.choice(possiblePrompts)
+
+    p2 = getParam(1)
+
+    if p2 == "":
+        p2 = getDecree("","")
+
+    return ollamaBase(p1, p2)
 
 def ollamaPalette():
     global ollamaHost
@@ -17063,7 +17802,7 @@ def ollamaPalette():
     response = client.chat(model='llama2', messages=[
         {
             'role': 'system',
-            'content': "Act as an assistant, returning a random color palette of 5 to 6 colors in hex format. Use json as the output format."
+            'content': "Act as an assistant, returning a random color palette of 5 to 6 colors in hex format. Give your palette a name, and include this name as a property in the output. Use JSON as the output format. Do not add a preamble or speak to the user. Simply output the JSON. You may add your opinion or thoughts as an additional JSON property. Please also add why you chose the palette name as an explanation property."
         },
         {
             'role': 'user',
@@ -17112,22 +17851,25 @@ def ollamaSummarize():
 # main function dictionary. add new fire stuff here ----- @~-------
 
 tdlTypes = OrderedDict([
-    ('dots', {'f':dots, 'it':'scratch', 'ot':'img'}),
+    ('flagship', {'f': flagship, 'it':'scratch', 'ot':'img', 'ff': 1}),
+    ('dots', {'f':dots, 'it':'scratch', 'ot':'img', 'ff': 0}),
     ('dotsDos', {'f':dotsDos, 'it':'scratch', 'ot':'img'}),
     ('boxabyss', {'f':boxabyss, 'it':'scratch', 'ot':'img'}),
     ('patoot', patoot),
-    ('ihavenoidea', ihavenoidea),
+    ('ihavenoidea', {'f':ihavenoidea, 'it':'scratch', 'ot':'img', 'ff': 1}),
     ('orangeblock', {'f':orangeblock, 'it':'walk', 'ot': 'img'}),
     ('insertBlocks', {'f':insertBlocks, 'it':'walk', 'ot': 'img'}),
     ('simplePublic', {'f':simplePublic, 'it':'walk', 'ot': 'img'}),
-    ('helloWorldOllama', {'f':helloWorldOllama, 'it':'llm', 'ot':'txt'}),
+    ('ollamaHelloWorld', {'f':ollamaHelloWorld, 'it':'llm', 'ot':'txt'}),
     ('llmDescribeImage', {'f':llmDescribeImage, 'it':'llm', 'ot':'txt'}),
     ('ollamaCraft', {'f': ollamaCraft, 'it': 'llm', 'ot':'txt'}),
     ('ollamaSimple', {'f': ollamaSimple, 'it': 'llm', 'ot':'txt'}),
+    ('ollamaBored', {'f': ollamaBored, 'it': 'llm', 'ot':'txt'}),
     ('ollamaPalette', {'f': ollamaPalette, 'it': 'llm', 'ot':'txt'}),
     ('ollamaSummarize', {'f': ollamaSummarize, 'it': 'llm', 'ot':'txt'}),
     ('fuckinthatdata', {'f': fuckinthatdata, 'it':'scratch', 'ot':'img'}),
-    ('vaguetransfer', vaguetransfer),    
+    ('vaguetransfer', vaguetransfer),
+    ('halfbleed', halfbleed),
     ('shakeHarderBoyBase', shakeHarderBoyBase),
     ('transferStation', transferStation),
     ('gritty', gritty),
@@ -17153,8 +17895,7 @@ tdlTypes = OrderedDict([
     ('remixer', remixer),
     ('hueTranspose', hueTranspose),
     ('atariripples', atariripples),
-    ('linePainter', linePainter),
-    ('halfbleed', halfbleed),
+    ('linePainter', linePainter),    
     ('wordspiral', wordspiral),
     ('colorSwitch', colorSwitch),
     ('subtlyWrong', subtlyWrong),
@@ -17221,7 +17962,7 @@ tdlTypes = OrderedDict([
     ('vaporSquares', vaporSquares),
     ('wordGrid', wordGrid),
     ('wordGrid2', {'f':wordGrid2, 'ot':'img'}),
-    ('wordGridTxT', {'f':wordGridTxT, 'ot':'txt'}),    
+    ('wordGridTxT', {'f':wordGridTxT, 'ot':'txt'}),
     ('wordGridStats', {'f':wordGridStats, 'ot':'txt'}),
     ('wordGridGematria', {'f':wordGridGematria, 'ot':'txt'}),
     ('wordGrid_image', wordGrid_image),
@@ -17260,7 +18001,7 @@ tdlTypes = OrderedDict([
     ('mixpub_blend', mixpub_blend),
     ('mix2_other', mix2_other),
     ('ladiesSpend', ladiesSpend),
-    ('rose', rose),
+    ('rose', {'f': rose, 'it':'scratch', 'ot':'img', 'ff': 1}),
     ('astrologyTable', astrologyTable),
     ('neobored', neobored),
     ('triangleNonSys', triangleNonSys),
@@ -17301,6 +18042,7 @@ tdlTypes = OrderedDict([
     ('hyperWorld', hyperWorld),
     ('greekWorld', greekWorld),
     ('localWorld', localWorld),
+    ('radial_gradient', radial_gradient),
     ('fullFill', fullFill),
     ('fullFillSpecific', fullFillSpecific),
     ('fullFillLatest', fullFillLatest),
@@ -17317,7 +18059,7 @@ tdlTypes = OrderedDict([
     ('wordfilled_mult', wordfilled_mult),
     ('newgrid', newgrid),
     ('fullGradient', fullGradient),    
-    ('idkWhyWhatever', idkWhyWhatever),
+    ('diagonal4Way', diagonal4Way),
     ('sigilGrid', sigilGrid),
     ('numpytest', numpytest),
     ('numpyVerySimple', numpyVerySimple),
@@ -17332,7 +18074,9 @@ tdlTypes = OrderedDict([
     ('opencv_gradient', opencv_gradient),
     ('generateAnim', generateAnim),
     ('generateAnimNumpy', generateAnimNumpy),
-    ('listFonts', listFonts)
+    ('listFonts', listFonts),
+    ('textHash', {'f':textHash, 'ot':'txt'}),
+    ('colorSample', {'f':colorSample, 'it':'scratch', 'ot':'img', 'ff': 0})
 ])
 
 def doMain(basey):
@@ -17435,10 +18179,10 @@ def doMain(basey):
     if imgtype == "stampSample":
         blob = stampSample()
         writeToDisk(blob, "./imagesExported/stampSample.png")
-        return (blob, frm)
-    if imgtype == "colorSample":
-        blob = colorSample()
-        writeToDisk(blob, "./imagesExported/colorSample.png")
+        return (blob, frm)    
+    if imgtype == "paletteSample":
+        blob = paletteSample()
+        writeToDisk(blob, "./imagesExported/paletteSample.png")
         return (blob, frm)
     
     rootLogger.warn("Couldn't find type: " + imgtype)
@@ -17457,7 +18201,7 @@ def writehtml(basey):
     try:
         imgtypeFunc = globals()[imgtype]
     except KeyError:
-        imgtype = "dots"
+        imgtype = "flagship"
         imgtypeFunc = globals()[imgtype]
 
     global functionDocs
@@ -17596,6 +18340,7 @@ def writehtml(basey):
         
         inputTypeMilk = "unk"
         outputTypeMilk = "img"
+        usesFF = 0
 
         alice = tdlTypes[tdl]
         if isinstance(alice, dict):
@@ -17603,6 +18348,8 @@ def writehtml(basey):
                 inputTypeMilk = alice["it"]
             if "ot" in alice:
                 outputTypeMilk = alice["ot"]
+            if "ff" in alice:
+                usesFF = alice["ff"]
         
         isSelImgType = "tdl_imgtype active" if imgtype == tdl else "tdl_imgtype"
 
@@ -17612,19 +18359,23 @@ def writehtml(basey):
         if outputTypeMilk != "":
             isSelImgType += " tdl-output-" + outputTypeMilk
 
-        body += '<li data-func="{}"><a class="{}" href="/tdl?imgtype={}{}{}{}{}{}{}{}{}">{}</a></li>'.format(tdl, isSelImgType, tdl, imageopPrnt, palettePrnt, param1Prnt, param2Prnt, param3Prnt, paramfontPrnt, insertSourcePrnt, paramFloodBoxesPrnt, tdl)
+        zonk = ' <span title="Uses floodfill">🚰</span>'
+        tdlDisp = f"{tdl}{zonk if usesFF > 0 else ''}"
+
+        body += '<li data-func="{}"><a class="{}" href="/tdl?imgtype={}{}{}{}{}{}{}{}{}">{}</a></li>'.format(tdl, isSelImgType, tdl, imageopPrnt, palettePrnt, param1Prnt, param2Prnt, param3Prnt, paramfontPrnt, insertSourcePrnt, paramFloodBoxesPrnt, tdlDisp)
         iType += 1
 
         if tdl == imgtype:
             outputType = outputTypeMilk
 
-    for xxop in ["colorSample", "floodSample", "stampSample"]:
+    for xxop in ["paletteSample", "floodSample", "stampSample"]:
         isSelImgType = "tdl_imgtype active" if imgtype == xxop else "tdl_imgtype"
 
         body += '<li data-func="{}"><a class="{}" href="/tdl?imgtype={}{}{}{}{}{}{}{}{}">{}</a></li>'.format(xxop, isSelImgType, xxop, imageopPrnt, palettePrnt, param1Prnt, param2Prnt, param3Prnt, paramfontPrnt, insertSourcePrnt, paramFloodBoxesPrnt, xxop)
     
     body += '<li><a href="/exported" target="_blank">exported image list</a></li>'
     body += '<li><a href="/stamps" target="_blank">stamp list</a></li>'
+    body += '<li><a href="/palettes" target="_blank">file palette list</a></li>'
 
     body += '</ul>'
 
@@ -17678,6 +18429,7 @@ def writehtml(basey):
         doccy = ""
 
     body += '<div id=\"sacred-output\" class=\"sacred-output sacred-output-main\">'
+    body += f'<div id=\"sacred-output-palette\"><table id=\"palette-table\"></table></div>'
 
     body += f'<div class=\"sacred-guid\" id=\"sacred-guid\"><input type=\"text\" class=\"flex-grow-1\" id=\"sacred-guid-value\" value=\"{getDecree("","",10)}.{"png"}\"></input><button type=\"button\" id=\"sacred-guid-button\" class=\"btn btn-flat flex-grow-0\" onclick=\"copyToClipboard();\">Copy</button><a href=\"\" id=\"sacred-image-dl\">Save</a></div>'
     
@@ -17769,10 +18521,6 @@ def writehtml(basey):
     body += '</HTML>'
 
     return body
-
-@app.route('/hello')
-def hello():
-    return render_template('hello.html', utc_dt=datetime.datetime.now(datetime.timezone.utc) )
 
 @app.route('/exif./<path:thing>')
 def send_exif_fix(thing):
@@ -17968,6 +18716,28 @@ def root():
     loadConfiguration()
     return writehtml(basey)
 
+@app.route('/hello')
+def hello():
+    return render_template('hello.html', utc_dt=datetime.datetime.now(datetime.timezone.utc) )
+
+@app.route('/testflood')
+def testflood():
+    # [{'xystart': (100, 512), 'targetcolour': (255, 255, 255, 255), 'newcolour': (0, 0, 0), 'dumpEvery': 1000, 'randomIt': 68, 'sizeLimit': (0, 0), 'choices': [(0, 0, 0), (30, 11, 11), (113, 43, 65), (143, 55, 55), (221, 98, 255)], 'maxStackDepth': 0, 'tippingPoint': 18, 'defaultTip': True, 'compFunc': 0, 'stamp': None, 'stampTrans': None, 'disobey': 0, 'variantOverride': None}]
+    basey = extractBasics()
+    loadConfiguration()
+
+    wrapperData = manager.dict()
+    wrapperData["xannies"] = manager.dict()
+    wrapperData["inserts_used"] = manager.dict()
+    wrapperData["function_states"] = manager.dict()
+
+    img = diagonal4Way()
+
+    [output, contentType, saveFormat] = writeImageToBytes(img, "PNG")
+    img_str = base64.b64encode(output.getvalue())
+
+    return img_str
+
 @app.route('/img')
 def tdl():
     basey = extractBasics()
@@ -18017,6 +18787,10 @@ def apiimg():
             if z not in inserts_used:
                 inserts_used.append(z)
 
+    gottened = getPaletteFromImageFull(blob, limit=10)
+
+    cholos = [rgb_to_hex(x) for x in gottened[0]]
+
     if currentUID in wrapperData["function_states"]:
         zink = wrapperData["function_states"][currentUID]
 
@@ -18028,7 +18802,9 @@ def apiimg():
         "basey": str(basey), 
         "currentUID": currentUID, 
         "inserts_used": inserts_used,
-        "function_states": function_states
+        "function_states": function_states,
+        "palette": cholos
+        #"palette_ogram": gottened[1]
     }
 
 @app.route('/favicon.png')
@@ -18053,6 +18829,10 @@ def send_static3(path):
 @app.route("/<regex(r'(.*?)\.(json|txt|png|ico|js|jpg|jpeg|tif|tiff)$'):file>", methods=["GET"])
 def public(file):
     return send_from_directory('./', file)
+
+@app.route('/palettes')
+def viewPals():
+    return viewADirectory("./sourceimages/palettes/", htmlPath="/sourceimages/palettes/")
 
 @app.route('/stamps')
 def viewStamps():

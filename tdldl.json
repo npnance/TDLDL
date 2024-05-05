@@ -1,6 +1,10 @@
 {
     "functionDocs": [
         {
+            "function": "flagship",
+            "description": "Welcome to TDLDL"
+        },
+        {
             "function": "dots",
             "description": "generates a grid of random colors with some modifications based on height"
         },
@@ -39,6 +43,11 @@
             "function": "whateverDude",
             "description": "",
             "timeout": 60
+        },
+        {
+            "function": "diagonal4Way",
+            "description": "",
+            "timeout": 45
         }
     ]
 }
