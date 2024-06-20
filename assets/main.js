@@ -137,7 +137,7 @@
 
                             moonColony.setAttribute("class", "language-json");                            
 
-                            var xxzzvv = JSON.stringify(data);
+                            var xxzzvv = JSON.stringify(data, undefined, 2);
 
                             var textNode = document.createTextNode(xxzzvv);
                             moonColony.appendChild(textNode);

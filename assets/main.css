@@ -6,6 +6,8 @@
     --color-walk: #5400ff;
     --color-func-text: oklch(52.94% 0.185 145.06);
     --color-func-text-content: darkgreen;
+    --color-p5-text: orange;
+    --color-p5-text-content: rgb(182, 126, 15);
 
     --font-old-sans: "MS Sans Serif";
     --font-weird: "Inconsolata", "MS Sans Serif", fantasy, script, sans-serif;
@@ -102,15 +104,17 @@ hr.tdl_sep {
     color: var(--color-secondary);
 }
 
+.tdl-input-insert,
 .tdl-input-walk {
     color: var(--color-walk);
 }
 
+.tdl-input-insert.active,
 .tdl-input-walk.active {
     background: linear-gradient(to right, white, var(--color-walk));
 }
 
-.tdl-output-img:not(.tdl-input-walk).active {
+.tdl-output-img:not(.tdl-input-walk):not(.tdl-input-insert).active {
     background: linear-gradient(to right, white, var(--color-secondary) 94%, white 95%);
     color: var(--color-primary);
 }
@@ -122,6 +126,15 @@ hr.tdl_sep {
 .tdl-output-txt.active {
     background: linear-gradient(to right, white, var(--color-func-text-content));
     color: var(--color-func-text-content);
+}
+
+.tdl-output-p5 {
+    color: var(--color-p5-text);
+}
+
+.tdl-output-p5.active {
+    background: linear-gradient(to right, white, var(--color-p5-text-content));
+    color: var(--color-p5-text-content);
 }
 
 .output-text-llm {
@@ -205,7 +218,7 @@ hr.tdl_sep {
 }
 
 .result-container-img:not(.loaded) {
-    background-image: linear-gradient(to bottom, red 0%, orange 12%, yellow 24%, green 40%, blue 52%, indigo 64%, violet 78%, black 90%, red 100%);
+    background-image: linear-gradient(to bottom, red 0%, orange 10%, yellow 20%, #00ff00 30%, green 40%, blue 50%, indigo 60%, #9000ff 70%, #FF00FF 80%, #fff 90%, red 100%);
     width: 30vw;
     min-width: 30vw;    
     min-height: 45vh;
@@ -322,4 +335,13 @@ pre {
 #palette-table td {
     border: 1px solid black;
     height: 1vh;
+}
+
+#canvasHolder {
+    height: 800px;
+    width: 600px;
+}
+
+.language-json {
+    font-size: .7em;
 }

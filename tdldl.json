@@ -2,7 +2,7 @@
     "functionDocs": [
         {
             "function": "flagship",
-            "description": "Welcome to TDLDL"
+            "description": "<h1>Welcome to TDLDL</h1>"
         },
         {
             "function": "dots",

@@ -77,7 +77,8 @@ allPaths = [
     "/mnt/u/code/python/commons/tiffsOnly/",
     "/mnt/t/Pictures/From Lumia920White/Camera roll/",
     "/mnt/t/Pictures/From_iPhone6/",
-    "./imagesExported/"
+    "./imagesExported/",
+    "/mnt/t/Pictures/stupidshit/"
 ]
 
 ollamaHost = 'http://192.168.1.29:11434/v1'
@@ -102,7 +103,7 @@ pathWebFonts = """<link href="https://fonts.googleapis.com/css?family=Bungee" re
 defaultInsertExtensions = ('.jpg','.gif','.png','.tif')
 
 def getCurrentStandardWidth():
-    return 1280
+    return 1024
 
 def getCurrentStandardHeight():
     return 1024
@@ -133,7 +134,10 @@ numba_logger.setLevel(logging.WARNING)
 
 colorPrint = ColorPrint(rootLogger)
 
-colorPrint.print_custom_palette(147, f"---------> here be dragons ------------------------>")
+def colorEsc(x):
+    return f'\x1b[38;5;{x}m'
+
+colorPrint.print_custom_palette(147, f"-----{colorEsc(148)}----> {colorEsc(196)}h{colorEsc(197)}e{colorEsc(198)}r{colorEsc(199)}e {colorEsc(200)}b{colorEsc(201)}e {colorEsc(202)}d{colorEsc(203)}r{colorEsc(204)}a{colorEsc(205)}g{colorEsc(206)}o{colorEsc(207)}n{colorEsc(208)}s {colorEsc(148)}-------{colorEsc(149)}----{colorEsc(150)}-----{colorEsc(147)}-------->")
 
 #----------- font blacklist. will not be chosen -------
 
@@ -553,6 +557,37 @@ def sort_by_lum(choices):
 def getInverse(c):
     inverse = (255-c[0],255-c[1],255-c[2])
     return inverse
+
+def getRandomColorRGB():
+    rgba = getRandomColor()
+    return (rgba[0], rgba[1], rgba[2])
+
+def getRandomColor(alpha=-1):
+    if alpha == -1:
+        alpha = random.randint(0, 255)
+        
+    random.seed()
+    r = random.randint(0, 255)
+
+    random.seed()
+    g = random.randint(0, 255)
+
+    random.seed()
+    b = random.randint(0, 255)
+
+    return (r, g, b, alpha)
+
+# Sum of the min & max of (a, b, c)
+def hilo(a, b, c):
+    if c < b: b, c = c, b
+    if b < a: a, b = b, a
+    if c < b: b, c = c, b
+    return a + c
+
+def getColorComplement(c):
+    (r, g, b) = c
+    k = hilo(r, g, b)
+    return tuple(k - u for u in (r, g, b))
     
 def resizeToMinMax(img, maxW, maxH, minW, minH):
     doTimeCheck("resizeToMinMax starts")
@@ -711,7 +746,8 @@ def getGoodRanges(pixels, rangeCount):
     if(len(range) < rangeCount):
         range.append(lastI)
 
-    rootLogger.debug("pixCounts: " + str(sorted(pixCounts.keys())))
+    #rootLogger.debug("pixCounts: " + str(sorted(pixCounts.keys())))
+    rootLogger.debug("pixCounts: " + str(pixCounts))
     rootLogger.debug("totalCount: " + str(totalCount))
     rootLogger.debug("range: " + str(range))
     rootLogger.debug("splitCount: " + str(splitCount))
@@ -1034,7 +1070,9 @@ def imageop_fourcolorBlend(inputFile, palette=0, choices=[]):
 
         result = result.resize((int(inputFile.size[0]), int(inputFile.size[1])), Image.LANCZOS)
 
-    blendAmount = random.randint(10, 29) * 0.01
+    blendAmount = random.randint(30, 88) * 0.01
+    
+    addState(f"blendAmount: {blendAmount}", None)
 
     img = Image.blend(inputFile, result, blendAmount)
 
@@ -1878,12 +1916,13 @@ def getAlgName(iAlg):
         "11", "12", "13", "14", "15", "16", "17", "18", "19",
         "20", "21", "22", "D E A D N I G H T G R O U N D", "24", "25", "26", "27", "28", "29",
         "30", "31", "32", "33", "34", "35", "36", "37", "38", "39",
-        "40", "41", "42", "43", "44", "45", "46", "47", "48", "49",
+        "MODDLEDEE", "MODDLEDUM", "42", "43", "44", "45", "46", "47", "48", "49",
         "50", "51", "52", "53", "54", "55", "56", "57", "58", "59",
         "60", "61", "62", "63", "64", "65", "66", "67", "68", "Nice.",
         "70", "71", "72", "73", "74", "75", "76", "77", "78", "79",
         "80", "81", "82", "83", "84", "85", "86", 
-        "idk yet", "88"
+        "idk yet", 
+        "no men no bears no women" # 88
     ]
     
     algDict = {i:values[i] for i in range(len(values))}
@@ -2338,9 +2377,9 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
         else:
             newcolour = choices[switcher]
                             
-        i += 1
+        ffSpecificState += 1
 
-        if i % tippingPoint == 0:
+        if ffSpecificState % tippingPoint == 0:
             switcher += 1
 
         if choices == []:    
@@ -2369,7 +2408,11 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
                                      random.randint(0,255))
     elif randomIt == 4:
         # dark noise
-        newcolour = (random.randint(0,100),
+        
+        if variant >= 1:
+            newcolour = random.choice(choices)
+        else:
+            newcolour = (random.randint(0,100),
                                      random.randint(0,128),
                                      random.randint(0,128))
     elif randomIt == 5:
@@ -2502,13 +2545,26 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
                             
         newcolour = (ffSpecificState[0], ffSpecificState[1], ffSpecificState[2])
     elif randomIt == 16:
-        # bland noise
-        if (count == 0 or count % 15 == 0) and choicesChosen:                            
-            newcolour = random.choice(choices)
+        # ever changing
 
-        a = [newcolour[0], newcolour[1], newcolour[2]]                    
-        random.shuffle(a)
-        newcolour = (a[0], a[1], a[2])
+        if variant == 1:
+            mod_q = tippingPoint
+        elif variant == 0:
+            mod_q = random.randint(1, tippingPoint)
+        else:
+            mod_q = variant
+
+        mod_x = x - (x % mod_q)
+        mod_y = y - (y % mod_q)
+        
+        if count % 2 == 0:
+            z = int(abs(math.hypot(mod_x, mod_y)))
+        else:
+            z = int(abs(math.hypot(mod_y, mod_x)))
+
+        z = z - (z % mod_q)
+        
+        (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
     elif randomIt == 17:
         # soldiers
         if count == 0:
@@ -2547,12 +2603,12 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
             newcolour = colorsKept[str(mod_y)]
     elif randomIt == 20:
         # small flannel
-        if last_z == 0:
+        if ffSpecificState == 0:
             z = y
-            last_z = 1
+            ffSpecificState = 1
         else:
             z = x
-            last_z = 0
+            ffSpecificState = 0
                             
         mod_x = z - (z % tippingPoint)
                         
@@ -2625,7 +2681,7 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
 
         conseq += amount
 
-                        # don't keep going the same direction all the time
+        # don't keep going the same direction all the time
         if conseq < variant_d2 or conseq > abs(variant_d2):
             amount = amount * variant_d3
             conseq = amount
@@ -2643,7 +2699,7 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
                 zzz = amount + (conseq % tippingPoint)
                 (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, zzz)
     elif randomIt == 24:
-                        # F U Z Z Y _ F L A N N E L __________________________
+        # F U Z Z Y _ F L A N N E L __________________________
         if last_z == 0:
             z = y
             zz = x
@@ -2826,7 +2882,18 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
 
         timesUsed[str(newcolour)] += 1
     elif randomIt == 35:
-                        # S_L_O_W__C_H_A_N_G_E_S_________________________________________________________--__-_____
+        # S_L_O_W__C_H_A_N_G_E_S_________________________________________________________--__-_____
+
+        ffSpecificState2 = 5
+
+        if variant > 1:
+            ffSpecificState2 = variant
+        elif variant == 0:
+            ffSpecificState2 = 1
+
+        mod_y = abs(y - starty)
+        mod_y = mod_y - (mod_y % ffSpecificState2)
+
         if not choicesChosen:
             if count == 0:
                 direction = 1
@@ -2839,8 +2906,10 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
                                     
                 newcolour = replace_at_index(newcolour, iThis, newcolour[iThis] + direction)
         else:
-            mod_x = x - (x % 5)
-            mod_x2 = (x - 5) - ((x-5)%5)
+            mod_x = x - (x % ffSpecificState2)
+            mod_x2 = (x - ffSpecificState2) - ((x-ffSpecificState2) % ffSpecificState2)
+
+            mod_x = mod_x + mod_y
 
             mod_x2c = 0
 
@@ -2857,7 +2926,7 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
 
                 colorsKept[str(mod_x)] = newcolour
     elif randomIt == 36:
-                        # B_A_R__S_C_R_E_W________________________________________________________
+        # B_A_R__S_C_R_E_W________________________________________________________
         mod_x = x - (x % tippingPoint) + (random.randint(-2, 2) * tippingPoint)
 
         if mod_x < 0:
@@ -2865,28 +2934,42 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
                             
         (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
     elif randomIt == 37:
-                        # AND MOD
+        # AND MOD
         mod_x = x & y
 
         (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
     elif randomIt == 38:
-                        # OR MOD
+        # OR MOD
         mod_x = x | y
 
         (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
     elif randomIt == 39:
-                        # EXP MOD
+        # EXP MOD
         mod_x = x ^ y
                         
         (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
     elif randomIt == 40:
-                        # MODDLEDEE
-        mod_x = (x - (x % tippingPoint)) & (y - (y % tippingPoint))
+        # MODDLEDEE / MODDLEDUM
+        if variant > 1:
+            tippingPoint = variant
+
+        if variant == 1:
+            mod_x = (x - (x % tippingPoint)) & (y - (y % tippingPoint))
+        elif variant == 0:
+            mod_x = (x - (x % tippingPoint)) | (y - (y % tippingPoint))
 
         (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
     elif randomIt == 41:
-                        # MODDLEDUM
-        mod_x = (x - (x % tippingPoint)) | (y - (y % tippingPoint))
+        # mark at the boon
+        if variant > 1:
+            tippingPoint = variant
+
+        if count % 2 == 0:
+            ffSpecificState = abs(x - y)
+        else:
+            ffSpecificState = abs((y ^ x) & (x ^ y))
+
+        mod_x = ffSpecificState - (ffSpecificState % tippingPoint)
 
         (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
     elif randomIt == 42:
@@ -3002,7 +3085,13 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
 
         (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, mod_x)
     elif randomIt == 56:
-                        # TRY BALL MEAT
+        # TRY BALL MEAT
+
+        if variant > 1:
+            tippingPoint = variant
+        elif variant == 0:
+            tippingPoint = random.randint(1, tippingPoint)
+
         if y > x:
             mod_x = int(abs(math.hypot(y, x))) | x
         else:
@@ -3301,10 +3390,20 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
 
         (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
     elif randomIt == 76:
-                        # SCOOL FENCE
-        tippingPoint = 20
+        # SCOOL FENCE
+        if variant == 1:
+            tippingPoint = 20
+        elif variant == 2:
+            tippingPoint = 10
+        elif variant > 1:
+            tippingPoint = variant
+        elif variant == 0 and count == 0:
+            ffSpecificState = random.randint(5, 25)
+            tippingPoint = ffSpecificState
+        else:
+            tippingPoint = ffSpecificState
 
-        i76 = random.randint(0, 25)
+        i76 = random.randint(0, 125)
         skool = (i76,i76,i76)
 
         y76 = y - (y % tippingPoint)
@@ -3316,7 +3415,7 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
         mod_x = abs(x - y) % tippingPoint
         mod76 = tippingPoint // 2
 
-        if abs(mod_x - mod76) < 2:
+        if abs(mod_x - mod76) < 1:
             z = 0
             (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, [skool], z)
         elif abs((x % tippingPoint) - mod_y2) < 1:
@@ -3445,13 +3544,18 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
     elif randomIt == 81:
         # DIGITAL OPULENCE
         if count == 0:
-            ffSpecificState = random.randint(2, 8)
-            ffSpecificState2 = random.randint(4, 12)
+            ffSpecificState = random.randint(2, 12)
+            ffSpecificState2 = random.randint(2, 12)            
+
+        variantState = 16
+        
+        if variant > 1:
+            variantState = variant
 
         mod_x = x - (x % ffSpecificState)
         mod_y = y - (y % ffSpecificState2)
                         
-        z = (mod_x << 16) | mod_y
+        z = (mod_x << variantState) | mod_y
 
         (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
     elif randomIt == 82:
@@ -3517,6 +3621,9 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
         # | 2 | 3 |
         
         mod_84 = 25 if variant == 1 else variant
+
+        if variant == 0:
+            mod_84 = random.randint(1, 25)
 
         mod_ff_x = int(x / mod_84)
         mod_ff_x = mod_ff_x % 3
@@ -3626,8 +3733,9 @@ def floodFillDetail(randomIt, choices, tippingPoint, stamp, stampTrans, width, h
 
         (colorsKept, newcolour) = get_kept_color(colorsKept, newcolour, choices, z)
     elif randomIt == 88:
-        if count % 2 == 0:
-            z = abs(x - y)
+        # no men no bears no women
+        if y % 2 == 0:
+            z = abs(x + y)
         else:
             z = abs(y - x)
 
@@ -5617,7 +5725,7 @@ def smellycatalina(startPos="",
         
     return img
 
-def textalinaimagemixer(squares=35, text=['    WHOA','          GURL'], fonSize=48):
+def textalinaimagemixer(squares=35, text=[], fonSize=48):
     img = ""
 
     cat = getParam(0)
@@ -5655,11 +5763,11 @@ def textalinaimagemixer(squares=35, text=['    WHOA','          GURL'], fonSize=
             fillStroke = (0,0,0)
             fillText = (random.randint(0,255),random.randint(0,255),random.randint(0,255))
         else:
-            startPos = (0,100)
+            startPos = (random.randint(0, 200), random.randint(0, 200))
             #fonSize = 
             lines = text
             fillStroke = (0,0,0)
-            fillText= (255,69,69)
+            fillText= getRandomColorRGB()
         
         img = smellycatalina(startPos, fonSize, lines, fillStroke, fillText, squares, fontPath=getFont())
 
@@ -5675,6 +5783,58 @@ def textalinaimagemixer(squares=35, text=['    WHOA','          GURL'], fonSize=
         #                         targetcolour = pixdata[x,y],
         #                         newcolour = (0,0,0),
         #                         randomIt = 4) 
+
+    except Exception as e:
+        img = writeImageException(e)
+        
+    return img
+
+def roundPaste():
+    try:
+        width = getCurrentStandardWidth()
+        height = getCurrentStandardHeight()
+
+        img = Image.new("RGB", (width,height), "#ffffff")
+        img = dots()
+
+        images = getChoicesWalk(getPathById(getParam(4)))
+    
+        success = False
+
+        outputWidth = getCurrentStandardWidth()
+        outputHeight = getCurrentStandardHeight()
+
+        maxSquareWidth = outputWidth // 4
+        maxSquareHeight = outputHeight // 4
+
+        zimg = ""
+        
+        while not success:
+            try:
+                leImg = random.choice(images)
+                zimg = Image.open(leImg)
+                zimg = zimg.resize((maxSquareWidth, maxSquareHeight))
+                zimg = zimg.convert("RGBA")
+
+                success = True
+
+                saveToWrapper_Insert(leImg)
+            except:
+                pass
+
+        mask = Image.new("L", (zimg.size[0], zimg.size[1]), 0)
+        pixdata = mask.load()
+
+        # for y in range(0, mask.size[1]-1):
+        #     for x in range(0, mask.size[0]-1):
+        #         if random.randint(1, 2) == 1:
+        #             pixdata[x, y] = 255
+
+        draw = ImageDraw.Draw(mask)
+        draw.ellipse([(0,0),(mask.size[0],mask.size[1])], 255, 255, 1)
+
+        img.paste(zimg, (0,0), mask)
+        #img.paste(mask, (0,0))
 
     except Exception as e:
         img = writeImageException(e)
@@ -5899,6 +6059,7 @@ def nightInterference():
 
         img = Image.new("RGB", (width,height), "#ffffff")
         draw = ImageDraw.Draw(img)
+        
         pixdata = img.load()
 
         r = random.randint(0, 255)
@@ -6042,7 +6203,7 @@ def colorHatch(width=getCurrentStandardWidth(), height=0, bw=0, doFF=1, squareX=
         y = 0
 
         global randoFillList
-        iAlg = random.choice(randoFillList)            
+        iAlg = random.choice(randoFillList)
         
         choices = getPaletteGenerated((r,g,b))
 
@@ -6576,7 +6737,10 @@ def dumpingJust():
     
     return img
 
-def rectangleMover(imgPath=""):
+def shapeMover(imgPath=""):
+    """p1: mode (0=rectangle, 1=circle) (default=1)
+    
+    """
     global rootLogger
 
     if imgPath == "":
@@ -6585,19 +6749,16 @@ def rectangleMover(imgPath=""):
     img = Image.open(imgPath)
     img.load()
     img = resizeToMinMax(img, maxW=1280, maxH=1024, minW=640, minH=480)
-
-    squareCount = random.randint(1, 100)   
-    
     inputFile = img.copy()
-  
+
+    squareCount = random.randint(10, 45)
+    
     x = 0
     y = 0
 
-    # box = (left, upper, right, lower)
-    # x, y, w, h = (70, 70, 30, 30)
-    # box = (x, y, x + w, y + h)
-    # region = img.crop(box)
-    # img2.paste(region, box)
+    p1 = getParam(0)
+    p1 = int(p1) if p1.isdecimal() else 1
+    p1 = 1 if p1 > 1 else p1
 
     for i in range(squareCount):
         try:           
@@ -6612,9 +6773,7 @@ def rectangleMover(imgPath=""):
             h = random.randint(1, 350)
 
             if y + h > inputFile.size[1]:
-                h = inputFile.size[1] - y
-            
-            #region = inputFile.crop(box)
+                h = inputFile.size[1] - y            
 
             movedX = random.randint(1, inputFile.size[0])
             movedY = random.randint(1, inputFile.size[1])
@@ -6623,12 +6782,24 @@ def rectangleMover(imgPath=""):
 
             region = inputFile.crop(boxMoved)
 
+            # TODO: fix when the chosen region is at the edge so it doesn't turn black
+
+            if p1 == 1:
+                mask = Image.new("L", (region.size[0], region.size[1]), 0)
+                maskdata = mask.load()
+                draw = ImageDraw.Draw(mask)
+                draw.ellipse([(0,0),(mask.size[0],mask.size[1])], 255, 255, 1)
+
             a = random.randint(1, inputFile.size[0])
             b = random.randint(1, inputFile.size[1])
             
             box = (a, b, a+w, b+h)
             
-            img.paste(region, box)
+            if p1 == 1:
+                img.paste(region, box, mask)
+            else:
+                img.page(region, box)
+
         except Exception as e:
             rootLogger.error(e)
             pass
@@ -9218,90 +9389,73 @@ def eightdots():
 
     return img
 
-def coco2(choices=[]):
-    width = 1200
-    height = 1000
+def bigSquareGrid(choices=[], yStep=0, xStep=0):
+    width = getCurrentStandardWidth()
+    height = getCurrentStandardHeight()
 
     try:
-        img = Image.new("RGBA", (width,height), "#ffffff")
+        if yStep == 0:
+            yStep = random.randint(18, 111)
+
+        if xStep == 0:
+            xStep = yStep
+
+        width = width - (width % xStep)
+        height = height - (height % yStep)
+
+        img = Image.new("RGBA", (width, height), "#ffffff")
         draw = ImageDraw.Draw(img)
         pixdata = img.load()
         
-        palette = ["00FF00", "0000FF", "FFFFFF", "FF00FF", "FFFF00", "FF0000", "00FFFF", "FF8000", "000000"]
-
-        if choices != []:
-            palette = []
-
-            for c in choices:
-                palette.append(rgb_to_hex(c[:3]))
-        
-        yStep = 100
-        xStep = 100
+        if choices == []:
+            choices = getInputPalette()
         
         for y in range(0, img.size[1], yStep):
             for x in range(0, img.size[0], xStep):
-                c = hex_to_rgb(random.choice(palette))
+                c = random.choice(choices)
 
                 for i in range(xStep):
                     for j in range(yStep):
                         if x+i < width and y+j < height:
                             pixdata[x+i,y+j] = c
+
     except Exception as e:
         img = writeImageException(e)
         
     return img    
 
 def coco2remixed():
-    img = coco2()
+    img = bigSquareGrid()
     img = remixer("", img)
 
     return img
 
-def coco2_18():
+def bigGridFilled():
+    global randoFillList
+    iAlg = random.choice(randoFillList)
+    
     try:
-        img = coco2()
+        choices = getInputPalette()
+        yStep = random.randint(18, 111)
+        img = bigSquareGrid(choices, yStep=yStep)
 
-        for i in range(125):
+        pixdata = img.load()
+
+        zzz = yStep // 3
+
+        for i in range(zzz):
             x = random.randint(0, img.size[0]-1)
             y = random.randint(0, img.size[1]-1)
 
-            pixdata = img.load()
             targ = pixdata[x,y]
-
-            iAlg = 20
-
-            while iAlg == 20:
-                iAlg = random.randint(18, 21)
-            
-            floodfill(img, (x, y), targetcolour = targ,
-                  newcolour = (0,0,0),
-                  randomIt = iAlg)
-    except Exception as e:
-        img = writeImageException(e)
-        
-    return img
-
-def coco2_18_palette():
-    try:
-        choices = getPalette()
-        img = coco2(choices)
-
-        for i in range(50):
-            x = random.randint(0, img.size[0]-1)
-            y = random.randint(0, img.size[1]-1)
-
-            pixdata = img.load()
-            targ = pixdata[x,y]
-
-            iAlg = 20
-
-            while iAlg == 20:
-                iAlg = random.randint(18, 21)
             
             floodfill(img, (x, y), targetcolour = targ,
                       newcolour = (0,0,0),
                       randomIt = iAlg,
-                      choices = choices)
+                      choices = choices,
+                      sizeLimit=(x,y),
+                      compFunc=0)
+            
     except Exception as e:
         img = writeImageException(e)
         
@@ -9497,7 +9651,7 @@ def insertStreaksCoco():
         img = insertStreaks()
         img = img.convert("RGB")
         
-        coco = coco2()
+        coco = bigSquareGrid()
         coco = coco.convert("P", palette=Image.ADAPTIVE)
         
         img = img.quantize(palette=coco)
@@ -10460,25 +10614,6 @@ def parboil(imgpath=""):
         img = writeImageException(e)
         
     return img
-
-def getRandomColorRGB():
-    rgba = getRandomColor()
-    return (rgba[0], rgba[1], rgba[2])
-
-def getRandomColor(alpha=-1):
-    if alpha == -1:
-        alpha = random.randint(0, 255)
-        
-    random.seed()
-    r = random.randint(0, 255)
-
-    random.seed()
-    g = random.randint(0, 255)
-
-    random.seed()
-    b = random.randint(0, 255)
-
-    return (r, g, b, alpha)
 
 def realspiral():
     width = 1024
@@ -11479,7 +11614,7 @@ def vaporSquares():
         for c in hexchoices:
             choices.append(hex_to_rgb(c))
 
-        coco = coco2(choices)
+        coco = bigSquareGrid(choices)
         coco = coco.convert("P", palette=Image.ADAPTIVE)
         
         img = img.quantize(method=2, palette=coco)
@@ -13298,13 +13433,14 @@ def processPalette(palette):
 
     return arr_palette
 
-def getInputPalette(paletteLength=7):
+def getInputPalette(paletteLength=7, generate=True):
     global input_palette
 
     if input_palette != "" and input_palette != []:
         choices = input_palette
     else:         
-        choices = getPaletteGenerated(paletteLength=paletteLength)
+        if generate:
+            choices = getPaletteGenerated(paletteLength=paletteLength)
 
     return choices
 
@@ -13343,9 +13479,18 @@ palettelist = [
     (32, "32 (sunset)"),
     (33, "33 (cappuchino)"),
     (34, "34 (solemn bob)"),
+    (35, "35 (radical)"),
     (47, "47 (metatronWorld)"),
+    (96, "96 (distant 4)"),
+    (97, "97 (distant 6)"),
     (98, "98 (palette from dir)"),
-    (99, "99 (GEN|ERA|TED)")
+    (99, "99 (GEN|ERA|TED)"),
+    (100, "100 (????)"),
+    (101, "101 (vaporwave+)"),
+    (102, "102 (primary+)"),
+    (103, "103 (wacky+)"),
+    (104, "104 (COCO+)"),
+    (105, "105 (Atari+)")
     ]
 
 def getPaletteSpecific(palette):
@@ -13360,33 +13505,56 @@ def getPaletteSpecific(palette):
     choices = []
 
     random.seed()
+
+    colorPrint.print_custom_palette(191, f"palette: {palette}")
     
-    if palette == 1:
+    if palette == 1 or palette == 101:
         # V_A_P_O_R_W_A_V_E______________________ONE
         hexchoices = ["#00f9ff","#c36fbf","#6cffa2","#fff400","#ff00ce"]
 
         for c in hexchoices:
-            choices.append(hex_to_rgb(c))
-    elif palette == 2:
+            c1 = hex_to_rgb(c)
+            choices.append(c1)
+
+            if palette == 101:
+                c2 = getColorComplement(c1)
+                choices.append(c2)
+    elif palette == 2 or palette == 102:
         # primary
         global primaryColors
-        choices = primaryColors
-    elif palette == 3:
+        choices = primaryColors.copy()
+
+        if palette == 102:
+            choices = addOppositeColors(choices)
+    elif palette == 3 or palette == 103:
         # wacky
         global wackyColors
-        choices = wackyColors
-    elif palette == 4:
+        choices = wackyColors.copy()
+
+        if palette == 103:
+            choices = [(255,255,0),(0,255,0),(255,0,255),(0,255,255),(0,0,255),(255,0,0)]
+    elif palette == 4 or palette == 104:
         # coco
         global cocoColors
 
         for c in cocoColors:
-            choices.append(hex_to_rgb(c))
-    elif palette == 5:
+            c1 = hex_to_rgb(c)
+            choices.append(c1)
+
+            if palette == 104:
+                c2 = getColorComplement(c1)
+                choices.append(c2)            
+    elif palette == 5 or palette == 105:
         # atari
         global atariColors
 
         for c in atariColors:
-            choices.append(hex_to_rgb(c))
+            c1 = hex_to_rgb(c)
+            choices.append(c1)
+
+            if palette == 105:
+                c2 = getColorComplement(c1)
+                choices.append(c2)
     elif palette == 6:
         hexc = ["#e3fb68","#c1ee73","#52a3ba","#344d78","#27292b"]
 
@@ -13541,7 +13709,12 @@ def getPaletteSpecific(palette):
         hexc = ["#338833","#1da27c","#30105a","#fbe82d","#510e0e","#632812","#0c4540"]
         
         for c in hexc:
-            choices.append(hex_to_rgb(c))    
+            choices.append(hex_to_rgb(c))
+    elif palette == 35:
+        hexc = ["#9A52FF","#FF5500","#980000","#FFE100","#63FFFC"]
+        
+        for c in hexc:
+            choices.append(hex_to_rgb(c))            
     elif palette == 47:
         hexc = ["#FFD700", "#c8b400", "#006400", "#3CB371"]
 
@@ -13553,9 +13726,46 @@ def getPaletteSpecific(palette):
         global input_palette
         input_palette = []
         choices = getPaletteGenerated(rgb = (0,0,0), paletteLength = random.randint(3, 8))
+    elif palette == 96:
+        # _color_target_check(pnt, targ, 25)
+
+        c1 = getRandomColorRGB()
+        c2 = getRandomColorRGB()
+
+        c3 = getColorComplement(c1)
+        c4 = getColorComplement(c2)
+
+        choices = [c1, c2, c3, c4]
+    elif palette == 97:
+        # _color_target_check(pnt, targ, 25)
+
+        c1 = getRandomColorRGB()
+        c2 = getRandomColorRGB()
+        c3 = getRandomColorRGB()
+
+        c4 = getColorComplement(c1)
+        c5 = getColorComplement(c2)
+        c6 = getColorComplement(c3)
+
+        choices = [c1, c2, c3, c4, c5, c6]
     else:
         input_palette = []
         return getPaletteGenerated()
+
+    return choices
+
+def addOppositeColors(choices):
+    colorPrint.print_warn('addOppositeColors: ' + str(choices))
+
+    d = []
+
+    for c in choices:
+        colorPrint.print_warn('c: ' + str(c))
+        c2 = getColorComplement(c)
+        d.append(c2)
+
+    for doice in d:
+        choices.append(doice)
 
     return choices
 
@@ -14502,8 +14712,8 @@ def mixpub_chop(imageop="add_modulo"):
 def mix2_imageops(imageop="add_modulo", source=0):
     img = ""
 
-    w = 1280
-    h = 1024
+    w = getCurrentStandardWidth()
+    h = getCurrentStandardHeight()
     
     try:
         img = Image.new("RGBA", (w, h), "#FFFFFF")
@@ -16106,13 +16316,23 @@ def greekWorld():
     
     return img
 
-def localWorld():
+def localWorld(distance=5):
+    """p1: distance (default=5)"""
     img = ""
 
-    w = 1024
-    h = 768
+    w = getCurrentStandardWidth()
+    h = getCurrentStandardHeight()
     
     try:
+        p1 = getParam(0)
+        p2 = getParam(1)
+    
+        p1 = int(p1) if p1.isdecimal() else 0
+        p2 = int(p2) if p2.isdecimal() else -1
+
+        if p1 != 0:
+            distance = p1
+    
         img = Image.open(getInsertById(getParam(4)))
         img = resizeToMinMax(img, maxW=w, maxH=h, minW=640, minH=480)
         img = img.convert("RGBA")
@@ -16120,12 +16340,12 @@ def localWorld():
         w = img.size[0]
         h = img.size[1]
 
-        colors = getPaletteFromImage(img, distance=5, limit=5)
+        colors = getPaletteFromImage(img, distance=distance, limit=5)
 
         im_pil = img.copy().convert("RGB")
         im_pil = ImageChops.invert(im_pil)
 
-        colors2 = getPaletteFromImage(im_pil, distance=5, limit=25)
+        colors2 = getPaletteFromImage(im_pil, distance=distance, limit=25)
 
         [colors.append(c) for c in colors2]
 
@@ -16138,6 +16358,110 @@ def localWorld():
         psys.putdata(colorfun(pixels, colors, ranges))
 
         img = psys
+    
+    except Exception as e:
+        img = writeImageException(e)
+    
+    return img
+
+def compuWorld(distance=5):
+    """p1: distance (default=5)"""
+
+    import cv2
+
+    startTimeCheck()
+    doTimeCheck("compuWorld starts")
+
+    global wrapperData
+    global currentUID
+
+    uid = currentUID
+
+    #ColorPrint.logger_info("wrapperData as greekWorld starts: " + writeWrapperToLog(wrapperData))
+
+    img = ""
+
+    w = getCurrentStandardWidth()
+    h = getCurrentStandardHeight()
+    
+    try:
+        img = Image.open(getInsertById(getParam(4)))
+        img = resizeToMinMax(img, maxW=w, maxH=h, minW=640, minH=480)
+        img = img.convert("RGBA")
+
+        saveForXanny(img)
+
+        choices = pullChoices(5)
+
+        w = img.size[0]
+        h = img.size[1]
+
+        pixCount = w * h
+
+        (img, mask, mask_cv) = opencv_removeBG_op(img, limitsLower=[200, 200, 200], limitsUpper=[255,255,255], kernelEllipse=(20,20))
+        # def opencv_removeBG_op(img="", limitsLower=[200, 200, 200], limitsUpper=[255,255,255], kernelEllipse=(20,20)):
+
+        img = img.convert("RGBA")
+
+        saveForXanny(img)
+        saveForXanny(mask)        
+
+        ogc = opencv_get_contours(img, random.choice(choices))
+        result = cv2.cvtColor(ogc, cv2.COLOR_BGR2RGB)
+
+        img2 = Image.fromarray(result)
+        img2 = img2.convert("RGBA")
+        
+        img = ImageChops.blend(img, img2, .5)
+
+        points = []
+
+        pixdata = mask.load()
+
+        for x in range(0, mask.size[0]):
+            for y in range(0, mask.size[1]):
+                c = pixdata[x, y]
+
+                if c == 0:
+                    points.append((x,y))                
+
+        random.shuffle(points)
+
+        pointCount = 0
+        greekFactor = .1
+
+        mask_old = mask.copy()
+        mask = mask.convert("RGBA")
+        pixdata = mask.load()
+        iAlg = random.randint(1, maxFloodFillArg)
+
+        for point in points:
+            #doTimeCheck("pointCount: " + str(pointCount) + " pixCount: " + str(pixCount))
+            x = point[0]
+            y = point[1]
+
+            pointCount += floodfill(mask, (x, y), targetcolour = pixdata[x,y],
+                                newcolour = (0,0,0),
+                                randomIt = iAlg,
+                                compFunc = 0,
+                                sizeLimit=(40, 40),
+                                choices=choices)
+
+            #doTimeCheck("pointCount: " + str(pointCount) + " pixCount: " + str(pixCount))
+
+            if pointCount >= (pixCount * greekFactor):
+                break
+   
+        zonk = img.copy()
+        saveForXanny(zonk)
+
+        img = ImageChops.composite(img, mask, mask_old)
+        
+        saveForXanny(mask)
+
+        doTimeCheck("img comp done // goodbye compuWorld")
+        
+        return img
     
     except Exception as e:
         img = writeImageException(e)
@@ -16270,8 +16594,8 @@ def fullFillStamp():
 
     return img
 
-def fullFillVariants(iAlg=87):
-    """p1: iAlg (default=87)<br />
+def fullFillVariants(iAlg=0):
+    """p1: iAlg (default=random)<br />
     p3: variant
     """
 
@@ -17110,7 +17434,7 @@ def numpySimple():
 
     return numpyFill(mod_x)
 
-def numpyFloodfill(iAlg=5002):
+def numpyFloodfill(iAlg=5001):
     # --- magic happens: tdlIdFloodfill
 
     tippingPoint = getTippingPoint(iAlg)
@@ -17155,7 +17479,7 @@ def numpyFloodfill(iAlg=5002):
         z = (mod_y << 4) + mod_x
         return z
 
-    def mod_x_5001(x, y, z, count, choices, tippingPoint):
+    def mod_x_5001(width, height, x, y, z, count, choices, tippingPoint):
         # SATURN'S ANNIVERSARY
 
         xHonk = x // 2
@@ -17167,7 +17491,7 @@ def numpyFloodfill(iAlg=5002):
 
         return (mod_x | (mod_y << 2))
 
-    def mod_x_5002(x, y, z, count, choices, tippingPoint):
+    def mod_x_5002(width, height, x, y, z, count, choices, tippingPoint):
         # SUNDAY NIGHT LAST RESORT
 
         xHonk = x // tippingPoint
@@ -17197,7 +17521,7 @@ def numpyFloodfill(iAlg=5002):
     random.seed()
     choices = getPaletteGenerated(paletteLength=10)
 
-    return numpyFill(mod_x_5002, mod_y=mod_y_5002, choices=choices, tippingPoint=tippingPoint)
+    return numpyFill(mod_x_5001, mod_y=mod_x_5001, choices=choices, tippingPoint=tippingPoint)
    
 def numpyFillStandardModY(width, height, x, y, z, count, c, q):
     return c
@@ -17218,7 +17542,7 @@ def numpyFill(mod_x, mod_y=numpyFillStandardModY, w=getCurrentStandardWidth(), h
 
         for x in range(0, w-1):
             for y in range(0, h-1):
-                q = mod_x(x,y,z,iCount,len(choices),tippingPoint)
+                q = mod_x(w, h, x, y, z, iCount, len(choices), tippingPoint)
 
                 if isinstance(q, int) or isinstance(q, str):
                     (colorsKept, c) = get_kept_color_new(colorsKept, c, choices, q)
@@ -17353,7 +17677,7 @@ def generateNumpy(mod_x, w=1024, h=768, choices=[], colorsKept={}, roundNum=0, r
 
     return (rgb, colorsKept)
 
-def opencv_removeBG_op(img=""):
+def opencv_removeBG_op(img="", limitsLower=[200, 200, 200], limitsUpper=[255,255,255], kernelEllipse=(20,20)):
     import cv2
     
     if img == "":    
@@ -17369,14 +17693,14 @@ def opencv_removeBG_op(img=""):
 
     # threshold on white
     # Define lower and uppper limits
-    lower = numpy.array([200, 200, 200])
-    upper = numpy.array([255, 255, 255])
+    lower = numpy.array(limitsLower)
+    upper = numpy.array(limitsUpper)
 
     # Create mask to only select black
     thresh = cv2.inRange(img, lower, upper)
 
     # apply morphology
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (20,20))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernelEllipse)
     morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
 
     # invert morp image
@@ -17398,6 +17722,28 @@ def opencv_removeBG(img=""):
     (im_pil, mask_pil, mask) = opencv_removeBG_op(img)
     return im_pil
     
+def opencv_process(img):
+    import cv2
+
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img_blur = cv2.GaussianBlur(img_gray, (3, 3), 2)
+    img_canny = cv2.Canny(img_blur, 50, 9)
+    img_dilate = cv2.dilate(img_canny, np.ones((4, 2)), iterations=11)
+    img_erode = cv2.erode(img_dilate, np.ones((13, 7)), iterations=4)
+
+    return cv2.bitwise_not(img_erode)
+
+def opencv_get_contours(img, c = (44, 88, 128)):
+    import cv2
+
+    img = toImgOpenCV(img)
+
+    contours, _ = cv2.findContours(opencv_process(img), cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    cnt = max(contours, key=cv2.contourArea)
+    cv2.drawContours(img, [cv2.convexHull(cnt)], -1, c, 2)
+
+    return img
+
 def opencv_inpaint():
     import cv2
 
@@ -17833,7 +18179,7 @@ def ollamaSummarize():
     response = client.chat(model='llama2', messages=[
         {
             'role': 'system',
-            'content': 'Summarize the text as a chapter of fiction. Provide at least 5 bullet points as to what happens.'
+            'content': 'Summarize the text as a chapter of fiction. List major plot points, any references, and unanswered questions.'
         },
         {
             'role': 'user',
@@ -17843,6 +18189,18 @@ def ollamaSummarize():
 
     outputText = "<div class='output-text-llm' id='output-text'>"
     output = response['message']['content'].replace("\n","<br />")
+    outputText += f"{output}"
+    outputText += "</div>"
+
+    return outputText
+
+def p5_1():
+    # <script language="javascript" type="text/javascript" src="/assets/box2d_html5.js"></script>
+    outputText = '<script src="/assets/p5_0002.js"></script>'
+    outputText += f'<div class="output-text-p5" id="output-text"><div class="" id="canvasHolder" data-mdignore="true">'
+
+    # output = response['message']['content'].replace("\n","<br />")
+    output = "JUMP POGO POGO POGO POGO POGO POGO POGO BOUNCE"
     outputText += f"{output}"
     outputText += "</div>"
 
@@ -17868,6 +18226,7 @@ tdlTypes = OrderedDict([
     ('ollamaPalette', {'f': ollamaPalette, 'it': 'llm', 'ot':'txt'}),
     ('ollamaSummarize', {'f': ollamaSummarize, 'it': 'llm', 'ot':'txt'}),
     ('fuckinthatdata', {'f': fuckinthatdata, 'it':'scratch', 'ot':'img'}),
+    ('p5_1', {'f': p5_1, 'it':'p5', 'ot':'p5'}),
     ('vaguetransfer', vaguetransfer),
     ('halfbleed', halfbleed),
     ('shakeHarderBoyBase', shakeHarderBoyBase),
@@ -17878,6 +18237,7 @@ tdlTypes = OrderedDict([
     ('catalinaimagemixer', catalinaimagemixer),
     ('smellycatalina', smellycatalina),
     ('textalinaimagemixer', textalinaimagemixer),
+    ('roundPaste', roundPaste),
     ('vgaBox', vgaBox),
     ('iWannaBeTheOne', iWannaBeTheOne),
     ('iWannaBeTheTwo', iWannaBeTheTwo),
@@ -17889,7 +18249,7 @@ tdlTypes = OrderedDict([
     ('whateverDude', whateverDude),
     ('jumpingDust', jumpingDust),
     ('dumpingJust', dumpingJust),
-    ('rectangleMover', rectangleMover),
+    ('shapeMover', {'f':shapeMover, 'it':'insert', 'ot':'img'}),
     ('randomInversion', randomInversion),
     ('repeatedInversion', repeatedInversion),
     ('remixer', remixer),
@@ -17924,10 +18284,9 @@ tdlTypes = OrderedDict([
     ('fourdots_18', fourdots_18),
     ('eightdots', eightdots),    
     ('fourdotsAnim', fourdotsAnim),
-    ('coco2', coco2),
+    ('bigSquareGrid', bigSquareGrid),
     ('coco2remixed', coco2remixed),
-    ('coco2_18', coco2_18),
-    ('coco2_18_palette', coco2_18_palette),
+    ('bigGridFilled', bigGridFilled),
     ('insert_18', insert_18),
     ('insertFoured', insertFoured),
     ('insertStreaks', insertStreaks),
@@ -18042,6 +18401,7 @@ tdlTypes = OrderedDict([
     ('hyperWorld', hyperWorld),
     ('greekWorld', greekWorld),
     ('localWorld', localWorld),
+    ('compuWorld', compuWorld),
     ('radial_gradient', radial_gradient),
     ('fullFill', fullFill),
     ('fullFillSpecific', fullFillSpecific),
@@ -18224,6 +18584,9 @@ def writehtml(basey):
     <script src="https://code.jquery.com/ui/1.12.0/jquery-ui.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.1/p5.min.js" integrity="sha512-jLPBEs8Tcpbj4AlLISWG0l7MbuIqp1cFBilrsy0BhvNUa0BLB4wVQeoL+93OYOdENFPKLOgrzb1Nytn+5N5y7g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.1/addons/p5.sound.min.js" integrity="sha512-WzkwpdWEMAY/W8WvP9KS2/VI6zkgejR4/KTxTl4qHx0utqeyVE0JY+S1DlMuxDChC7x0oXtk/ESji6a0lP/Tdg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <script src="/assets/main.js"></script>
   </head>
@@ -18421,6 +18784,9 @@ def writehtml(basey):
     elif outputType == "txt":
         resultHere = imgtypeFunc()
         body += '<div id="result-container" class="result-container" data-t="' + str(time.time()) + '">' + resultHere + '</div>'
+    elif outputType == "p5":
+        resultHere = imgtypeFunc()
+        body += '<div id="result-container" class="result-container" data-t="' + str(time.time()) + '">' + resultHere + '</div>'
     else:
         # NOOP
         pass
@@ -18560,13 +18926,16 @@ def send_exif(thing):
 #         # root-level tag
 #         print(f"{ExifTags.TAGS.get(tag_code)}: {value}")
 
+    errors = []
+    
     for ifd_key, ifd_value in exif.get_ifd(0x8769).items():
         ifd_tag_name = ExifTags.TAGS.get(ifd_key, ifd_key)
         
         try:
             zzz[ifd_tag_name] = ifd_value.decode('ascii') if isinstance(ifd_value, bytes) else ifd_value if isinstance(ifd_value, str) else str(ifd_value)
-        except:
+        except Exception as ex:
             zzz[ifd_tag_name] = str(ifd_value)
+            errors.append(ex)
 
         print(f" {ifd_tag_name}: {ifd_value}")
 
@@ -18575,7 +18944,8 @@ def send_exif(thing):
     return {
         "_item": thing,
         "exif": str(exif), 
-        "extracted": zzz 
+        "extracted": zzz,
+        "errors": errors
     }
 
 def extractQuery():
@@ -18722,7 +19092,6 @@ def hello():
 
 @app.route('/testflood')
 def testflood():
-    # [{'xystart': (100, 512), 'targetcolour': (255, 255, 255, 255), 'newcolour': (0, 0, 0), 'dumpEvery': 1000, 'randomIt': 68, 'sizeLimit': (0, 0), 'choices': [(0, 0, 0), (30, 11, 11), (113, 43, 65), (143, 55, 55), (221, 98, 255)], 'maxStackDepth': 0, 'tippingPoint': 18, 'defaultTip': True, 'compFunc': 0, 'stamp': None, 'stampTrans': None, 'disobey': 0, 'variantOverride': None}]
     basey = extractBasics()
     loadConfiguration()
 
