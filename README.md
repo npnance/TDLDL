@@ -1,6 +1,6 @@
 # TDLDL
 
-![Twitter Follow](https://img.shields.io/twitter/follow/natealism?style=social)
+![blank image filled with TDL repeatedly using the fullFill operation](./samples/heroFullFill.png)
 
 TDLDL is ~an old app that lives at the school~ a Flask-based Python 3 app that generates or processes images in its own unique way. I created it to perform Mario Paint-like stamp floodfills on images, and it grew from there.
 
@@ -23,14 +23,16 @@ Before you begin, ensure you have met the following requirements:
 * You have read either *House of Leaves* or listened to 4'33" more than once.
 * TDLDL was originally called TDL. I don't remember what TDL meant
 * Actually it was originally called "imageTDL3.py" if that floats your boat somehow
+* TDL for Dumb Linux
 
 ## Actual Prerequisites
 
 * Python 3.8+
 * Flask
-* NumPy
+* NumPy / numba
 * OpenCV_Python
 * Pillow (PIL)
+* wordnet (wn)
 * dude just look at requirements.txt (Ollama is used but optional, it's imported when needed)
     * TODO: add some config flags to turn off certain features
 * Dictionaries and word files placed in a directory (specified in the source file, tdldl.py).
@@ -102,7 +104,7 @@ But feel free to fork it.
 
 Thanks to the following people who have contributed to this project:
 
-* [me](https://github.com/npnance) 
+* [me](https://github.com/npnance)
 * no one else worked on this thing ever
 
 ## Contact
@@ -111,7 +113,7 @@ Email in the profile.
 
 ## License
 
-[TDLDL](https://github.com/npnance/TDLDL) © 2009-2024 by [Natali Nance](https://github.com/npnance/) is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+[TDLDL](https://github.com/npnance/TDLDL) © 2009-2025 by [Natali Nance](https://github.com/npnance/) is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
 **Commercial use is prohibited, whether it is the application itself or the images/text it creates.** For commercial licensing, you MUST contact me. I have put hundreds of Friday night hours into building TDLDL. "I’ve got this thing and it’s fucking golden, and, uh, uh, I’m just not giving it up for fuckin’ nothing. I’m not gonna do it. And, and I can always use it. I can parachute me there.” — Former Governor and convicted felon Rod Blagojevich
 

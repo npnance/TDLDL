@@ -17638,9 +17638,16 @@ def radial_gradient():
     return img
 
 def fullFill(w=getCurrentStandardWidth(),h=getCurrentStandardHeight(),iAlg=0):
+    """
+    p1 = iAlg (default 0)<br />
+    p2 = palette length when generated
+    """
+
     img = ""
     
     try:
+        w = 640
+        h = 480
         img = Image.new("RGBA", (w, h), "#ffffff")
         pixdata = img.load()
 
@@ -17651,14 +17658,12 @@ def fullFill(w=getCurrentStandardWidth(),h=getCurrentStandardHeight(),iAlg=0):
 
         c = pixdata[w//2,h//2]
 
-        pl = random.randint(10, 25)
-        
-        global input_palette
+        parmies = getIntParams(iAlg, random.randint(10, 25))
+        pl1 = parmies[1]
 
-        if input_palette != "" and input_palette != []:
-            choices = input_palette
-        else:         
-            choices = getPaletteGenerated(paletteLength=pl)
+        iAlg = parmies[0]
+        
+        choices = getInputPalette(paletteLength=pl1)
         
         floodfill(img, (w//2,h//2),
                           targetcolour = c,
@@ -17693,7 +17698,12 @@ def fullFillLatest():
 
     return fullFill(iAlg=maxFloodFillArg)
 
-def fullfillX2():
+def fullfillBlend2():
+    """
+    p1 = iAlg (default 0)<br />
+    p2 = palette length when generated
+    """
+
     try:
         img = fullFill()
         img2 = fullFill()
@@ -20365,7 +20375,7 @@ tdlTypes = OrderedDict([
     ('fullFill', fullFill),
     ('fullFillSpecific', fullFillSpecific),
     ('fullFillLatest', fullFillLatest),
-    ('fullfillX2', fullfillX2),
+    ('fullfillBlend2', {'f':fullfillBlend2, 'ot':'img', 'ff':1}),
     ('fullFillStamp', fullFillStamp),
     ('fullFillVariants', fullFillVariants),
     ('screenshotFill', screenshotFill),
