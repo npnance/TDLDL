@@ -9,6 +9,10 @@
             "description": "generates a grid of random colors with some modifications based on height"
         },
         {
+            "function": "bored",
+            "description": "<span class='font-random'>you wouldn't last an hour in the asylum where they raised me</span>"
+        },
+        {
             "function": "catalinaimagemixer",
             "description": "<span style='color:#722F37;font-size:2em;font-weight:bolder;'>IT'S A FUCKIN' CATALINA IMAGE MIXER!!!!</span>"
         },
@@ -48,6 +52,11 @@
             "function": "diagonal4Way",
             "description": "",
             "timeout": 45
+        },
+        {
+            "function": "triangleGrid",
+            "description": "it's a grid of triangles floodfilled",
+            "timeout": 60
         }
     ]
 }

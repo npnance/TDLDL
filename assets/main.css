@@ -10,15 +10,44 @@
     --color-p5-text-content: rgb(182, 126, 15);
 
     --font-old-sans: "MS Sans Serif";
-    --font-weird: "Inconsolata", "MS Sans Serif", fantasy, script, sans-serif;
+    --font-weird: "Track", "Inconsolata", "MS Sans Serif", fantasy, script, sans-serif;
+    --font-nabla: "Nabla"
+}
+
+@font-face {
+    font-family: 'Kingthings Extortion';
+    src: url('/assets/Kingthings Extortion.ttf');
 }
 
 body {
     font-family: "Amiko","Arial Nova","Helvetica","Arial","MS Sans Serif",sans-serif;    
 }
 
+h1 {
+    font-size: 1.5em;
+}
+
 .font-weird {
     font-family: var(--font-weird);
+}
+
+.font-threed {
+    font-family: "Nabla", system-ui;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+    font-variation-settings: "EDPT" 80, "EHLT" 12;
+    font-size: 1.9em;
+}
+
+#main-hex {
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out; /* Optional: for a fade-in effect */
+}
+
+.font-random {
+    font-family: "Kingthings Extortion";
+    font-size: 1.4em;
 }
 
 .container-reload {
@@ -137,6 +166,12 @@ hr.tdl_sep {
     color: var(--color-p5-text-content);
 }
 
+.lemmas {
+	width: 75%;
+	margin: 0 auto;
+	text-align: center;
+}
+
 .output-text-llm {
     width: 75%;
     margin: auto auto;
@@ -156,7 +191,7 @@ hr.tdl_sep {
 }
 
 .output-text ul:not(.palette) {
-    background: linear-gradient(red, yellow, black);
+    background: linear-gradient(red, orange, yellow, green, blue, indigo, violet);
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -183,6 +218,8 @@ hr.tdl_sep {
 
 .description-container {
     margin-bottom: 5vh;
+    font-family: var(--font-weird);
+    font-size: 1.5em;
 }
 
 .output-img:not(.loaded) {
@@ -290,13 +327,21 @@ pre {
     border-image: conic-gradient(red, yellow, lime, aqua, blue, magenta, red) 1;
 }
 
-.btn-top {
+.btn-top,
+.btn-bottom {
     z-index: 2;
     border-radius: .4em; 
-    position: fixed; 
-    left: 16vw; 
+    position: fixed;     
     background-color: var(--color-primary);
     color: var(--color-primary-content);
+}
+
+.btn-top {
+    left: 16vw; 
+}
+
+.btn-bottom {
+    left: 13vw; 
 }
 
 .img-upload-container {

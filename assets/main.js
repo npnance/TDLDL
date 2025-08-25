@@ -207,6 +207,11 @@
         document.getElementById("sidebar").scrollTop = 0;        
     } 
 
+    function bottomFunction() {
+        var sidebar = document.getElementById("sidebar");
+        sidebar.scrollTop = sidebar.scrollHeight;
+    } 
+
     function copyToClipboard() {        
         var copyText = document.getElementById("sacred-guid-value");
 
@@ -224,6 +229,10 @@
     });    
 
     // tags: document.ready
+    document.fonts.ready.then(function () {
+        document.getElementById("main-hex").style.opacity = '1';
+    });
+
     $( document ).ready(function() {
         callAPI();
 
@@ -249,5 +258,14 @@
 
     $(document).on('mousemove', function(e) {
         var hhh = $('#myBtn').height();
+        var iii = $('#myBtn2').height();
+
         $('#myBtn').css('top', e.clientY - (hhh / 2));
+        $('#myBtn2').css('top', e.clientY - (iii / 2));
+    });
+
+    $(document).keypress(function (e) {
+        if (e.keyCode === 13) {
+            $("#btnGo").click();
+        }
     });
