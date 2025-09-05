@@ -76,15 +76,36 @@
     }
    
     function callAPI() {
-        const start = performance.now();        
+        const start = performance.now();
+        var isComplete = false;
+
         var saveFilename = $("#sacred-guid-value").val();
 
         if (typeof apiURL == "undefined") {
+            var socode = document.getElementById('sacred-output-code');
+            socode.innerHTML = "Text output: No image data to display";
+
             return;
         }
 
+        $("#time-elapsed").removeClass("not-loaded");
+        $("#time-elapsed").removeClass("loaded");
+
+        var daInterval = setInterval(()=> {
+            const end = performance.now();
+                
+            if (!isComplete) {
+                $("#time-elapsed").html(`${(end - start) / 1000.0}s`);
+                $("#time-elapsed").addClass("not-loaded");
+            } else {
+                window.clearTimeout(daInterval);
+            }
+        }, 500);
+    
         var resp = $.getJSON(apiURL)
             .done(function( data ) {
+                var socode = document.getElementById('sacred-output-code');
+
                 var outputImg = document.getElementById('output-img');
                 outputImg.src = 'data:image/png;base64,' + data.image;
 
@@ -92,8 +113,7 @@
                 saveImgBtn.href = 'data:image/png;base64,' + data.image;
                 saveImgBtn.download = saveFilename;
 
-                var sacred_output = document.getElementById('sacred-output');
-                var socode = document.getElementById('sacred-output-code');
+                var sacred_output = document.getElementById('sacred-output');                
 
                 // var soPalette = document.getElementById('sacred-output-palette');
 
@@ -151,8 +171,13 @@
                     }
                 }
             })
+            .fail((e) => {
+                console.log( "callAPI getJSON error fail" );
+            })
             .always((e) => {
                 const end = performance.now();
+                isComplete = true;
+                $("#time-elapsed").removeClass("not-loaded");
                 
                 $("#time-elapsed").html(`${(end - start) / 1000.0}s`);
 
@@ -160,6 +185,7 @@
 
                 $("#result-container-img").addClass("loaded");
                 $("#output-img").addClass("loaded");
+                $("#time-elapsed").addClass("loaded");
             });
 
         return resp;
@@ -220,6 +246,11 @@
         navigator.clipboard.writeText(copyText.value);
         console.log("Copied to clipboard: " + copyText.value);
     } 
+
+    function toggleEss() {
+        $(".tdl-normal").toggleClass('hidden');
+        $(".tdl_sep").toggleClass('hidden');
+    }
     
     const toBase64 = file => new Promise((resolve, reject) => {
         const reader = new FileReader();

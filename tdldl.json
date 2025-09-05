@@ -17,6 +17,10 @@
             "description": "<span style='color:#722F37;font-size:2em;font-weight:bolder;'>IT'S A FUCKIN' CATALINA IMAGE MIXER!!!!</span>"
         },
         {
+            "function": "smellycatalina",
+            "description": "<span style='color:#722F37;font-size:1em;font-weight:bolder;'>don't you touch my inserts!!</span>"
+        },
+        {
             "function": "altWorld",
             "description": "replace every pixel with a different color<br />and keep that color to use for the same color elsewhere in the image<br />has intentional \"bug\" that it only replaces the first instance of the color<br />because actually doing every pixel looks incomprehensible"
         },
@@ -56,6 +60,11 @@
         {
             "function": "triangleGrid",
             "description": "it's a grid of triangles floodfilled",
+            "timeout": 60
+        },
+        {
+            "function": "textGenScatter",
+            "description": "",
             "timeout": 60
         }
     ]

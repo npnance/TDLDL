@@ -6,7 +6,8 @@
     --color-walk: #5400ff;
     --color-func-text: oklch(52.94% 0.185 145.06);
     --color-func-text-content: darkgreen;
-    --color-p5-text: orange;
+    --color-func: oklch(78.16% 0.16721 70.492);
+    --color-p5-text: rgb(255, 105, 11);
     --color-p5-text-content: rgb(182, 126, 15);
 
     --font-old-sans: "MS Sans Serif";
@@ -29,6 +30,10 @@ h1 {
 
 .font-weird {
     font-family: var(--font-weird);
+}
+
+.hidden {
+    display: none;
 }
 
 .font-threed {
@@ -122,8 +127,13 @@ ul.imgtypes-list li {
 .tdl_imgtype.active {
     font-weight: bolder;
     font-size: 1.25em;
-    display: block;        
+    display: inline-block;        
     text-shadow: 2px 2px 1px white;
+}
+
+.tdl-imgtype {
+    display: inline-block;
+    font-size: .7em;
 }
 
 hr.tdl_sep {
@@ -138,12 +148,20 @@ hr.tdl_sep {
     color: var(--color-walk);
 }
 
+.tdl-input-func {
+    color: var(--color-func);
+}
+
 .tdl-input-insert.active,
 .tdl-input-walk.active {
     background: linear-gradient(to right, white, var(--color-walk));
 }
 
-.tdl-output-img:not(.tdl-input-walk):not(.tdl-input-insert).active {
+.tdl-input-func.active {
+    background: linear-gradient(to right, white, var(--color-func));
+}
+
+.tdl-output-img:not(.tdl-input-walk):not(.tdl-input-insert):not(.tdl-input-func).active {
     background: linear-gradient(to right, white, var(--color-secondary) 94%, white 95%);
     color: var(--color-primary);
 }
@@ -262,6 +280,33 @@ hr.tdl_sep {
     background-size: cover;
     animation: anim-img-bg 10s linear 0s infinite alternate both;
     transition: all;        
+}
+
+.time-elapsed.loaded {
+    color: green;
+    font-weight: bold;
+}
+.time-elapsed.not-loaded {
+    color: red;
+    font-weight: bold;
+}
+
+.tdl-img-fast,
+.tdl-img-norm,
+.tdl-img-slow {
+    font-weight: bold;
+}
+
+.tdl-img-slow {
+    color: red;
+}
+
+.tdl-img-norm {
+    color: black;
+}
+
+.tdl-img-fast {
+    color: green;
 }
 
 @keyframes anim-img-bg {
