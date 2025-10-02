@@ -13,6 +13,10 @@
             "description": "<span class='font-random'>you wouldn't last an hour in the asylum where they raised me</span>"
         },
         {
+            "function": "fuckinthatdata",
+            "description": "<span class='font-random'>i'm fuckin that data<br />i'm fuckin that data because we can<br /></span>"
+        },
+        {
             "function": "catalinaimagemixer",
             "description": "<span style='color:#722F37;font-size:2em;font-weight:bolder;'>IT'S A FUCKIN' CATALINA IMAGE MIXER!!!!</span>"
         },
@@ -66,6 +70,11 @@
             "function": "textGenScatter",
             "description": "",
             "timeout": 60
+        },
+        {
+            "function": "effect_mandelbrot_anim",
+            "description": "",
+            "timeout": 120
         }
     ]
 }

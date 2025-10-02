@@ -65,6 +65,12 @@ h1 {
     height: 30px;
 }
 
+.container-down {
+    float: right;
+    margin-right: 7%;
+    margin-top: 1vh;
+}
+
 .caption {
     margin-left: 20px;
     margin-top: 20px;        
@@ -213,6 +219,7 @@ hr.tdl_sep {
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    animation: anim-img-bg 22s linear 0s infinite alternate both
 }
 
 .output-text ul.palette {
@@ -347,6 +354,16 @@ pre {
     flex-direction: column;
 }
 
+#palette-table tr td {
+	text-align: center;
+    font-size: .7em;
+}
+
+#sacred-palette-hex {
+	text-align: center;
+	font-size: .7em;
+}
+
 .exif-url {
     border: 3px solid #0000aa;
     padding: 1vh 1vw 1vh 1vw;
@@ -433,5 +450,48 @@ pre {
 }
 
 .language-json {
-    font-size: .7em;
+    font-size: 1em;
+}
+
+/*
+    palette numba stuff
+*/
+
+#palette {
+    color: black;
+}
+
+.choices__list--dropdown {
+    width: 80%;
+}
+
+/* add a color dot using the --chip var we set in JS */
+.choices__list--dropdown .choices__item {
+  position: relative;
+  padding-left: 28px;
+}
+
+.choices__inner {
+  border-radius: 8px;
+}
+
+/* Let the selected pill inherit the container’s background/text color */
+.choices[data-type*="select-one"] .choices__inner {
+  transition: background .2s ease, color .2s ease;
+}
+
+/* Make the visible single item transparent so the container shows through */
+.choices__list--single .choices__item {
+  background: transparent !important;
+  color: inherit !important;
+}
+
+/* Optional: highlight the selected item in the dropdown using the same styles */
+.choices__list--dropdown .choices__item.is-selected {
+  color: inherit;
+  background: inherit;
+}
+
+.buckyCheckboxes {
+    columns: 4;
 }
